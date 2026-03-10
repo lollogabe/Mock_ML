@@ -1,0 +1,30 @@
+# CERN Jet Anomaly Detection — Project Configuration
+# =====================================================
+# All hyperparameters are centralised here.
+# Override individual values via CLI flags or environment variables.
+
+# ── Dataset ──────────────────────────────────────────────────────────────────
+group:    37             # CERN dataset group identifier
+data_dir: data/raw       # Where to save / load .npz files
+
+# ── Directories ───────────────────────────────────────────────────────────────
+checkpoint_dir: checkpoints
+log_dir:        logs
+
+# ── Model ──────────────────────────────────────────────────────────────────────
+hidden_channels: 32    # Base channel count in conv layers
+latent_dim:       4    # Bottleneck dimensionality
+
+# ── Training ───────────────────────────────────────────────────────────────────
+batch_size:    64
+test_frac:     0.2     # Fraction of normal data held out as validation set
+seed:          42      # Global random seed for reproducibility
+lr:            1.0e-3  # Adam learning rate
+weight_decay:  1.0e-5  # Adam L2 regularisation
+epochs:        20      # Training epochs (loss stabilises around epoch 15-20)
+
+# ── Evaluation ──────────────────────────────────────────────────────────────────
+fpr_threshold: 0.10    # Target false positive rate upper bound
+
+# ── Hardware ────────────────────────────────────────────────────────────────────
+device: auto           # 'auto' | 'cpu' | 'cuda' | 'cuda:0'
