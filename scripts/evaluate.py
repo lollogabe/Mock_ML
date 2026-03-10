@@ -112,13 +112,13 @@ def main() -> None:
     logger.info("Finding anomalies via MSE loss …")
     loss_lbl_train, loss_lbl_test, loss_lbl_low, loss_lbl_high = find_anomalies(
         loss_n_train, loss_n_test, loss_h, loss_l,
-        fpr_threshold=fpr, score_type="Loss (MSE)", plot=plot,
+        fpr_threshold=fpr, score_type="Loss (MSE)", plot=plot, save_dir="plots",
     )
 
     logger.info("Finding anomalies via Mahalanobis distance …")
     dist_lbl_train, dist_lbl_test, dist_lbl_low, dist_lbl_high = find_anomalies(
         dist_n_train, dist_n_test, dist_h, dist_l,
-        fpr_threshold=fpr, score_type="Mahalanobis distance", plot=plot,
+        fpr_threshold=fpr, score_type="Mahalanobis distance", plot=plot, save_dir="plots",
     )
 
     # ── Dimensionality reduction ───────────────────────────────────────────────
@@ -128,7 +128,7 @@ def main() -> None:
         np.full(len(Z_n_test), 0),
         np.full(len(Z_low),    2),
     ])
-    run_pca_umap(Z_all, labels, plot=plot, use_umap=not args.no_umap)
+    run_pca_umap(Z_all, labels, plot=plot, use_umap=not args.no_umap, save_dir="plots")
 
     # ── GMM ───────────────────────────────────────────────────────────────────
     logger.info("Running GMM clustering …")

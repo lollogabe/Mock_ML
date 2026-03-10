@@ -152,6 +152,7 @@ def find_anomalies(
     plot: bool = True,
     y_max: float = 1.0,
     ylog: bool = False,
+    save_dir: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Apply a percentile threshold and compute anomaly fractions.
 
@@ -165,9 +166,10 @@ def find_anomalies(
         l_scores:       Anomaly scores for low-anomaly samples.
         fpr_threshold:  Target FPR upper bound (default 10 %).
         score_type:     X-axis label for the plot.
-        plot:           If True, show a histogram of the scores.
+        plot:           If True, plot a histogram of the scores.
         y_max:          Upper Y-axis limit for histogram.
         ylog:           If True, use log-scale Y axis.
+        save_dir:       Optional directory to save the plot.
 
     Returns:
         (labels_n_train, labels_n_test, labels_l, labels_h) — binary arrays.
@@ -215,6 +217,11 @@ def find_anomalies(
         if ylog:
             plt.yscale("log")
         plt.tight_layout()
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            safe_name = score_type.lower().replace(" ", "_").replace("(", "").replace(")", "")
+            plt.savefig(os.path.join(save_dir, f"histogram_{safe_name}.png"), dpi=150)
+            logger.info(f"Saved plot: {safe_name}")
         plt.show()
 
     return labels_n_train, labels_n_test, labels_l, labels_h
@@ -229,6 +236,7 @@ def run_pca_umap(
     labels: np.ndarray,
     plot: bool = True,
     use_umap: bool = True,
+    save_dir: Optional[str] = None,
 ) -> Dict[str, np.ndarray]:
     """Apply PCA (and optionally UMAP) to the full latent space and plot.
 
@@ -238,6 +246,7 @@ def run_pca_umap(
                   (0=n_test, 1=n_train, 2=low, 3=high).
         plot:     If True, generate scatter plots.
         use_umap: If True, also run UMAP.
+        save_dir: Optional directory to save the plots.
 
     Returns:
         Dict with keys 'pca' and optionally 'umap', each (N, 2) numpy arrays.
@@ -271,6 +280,9 @@ def run_pca_umap(
                      label="0=n_test, 1=n_train, 2=low, 3=high")
         plt.grid(True, ls="--", alpha=0.5)
         plt.tight_layout()
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, "pca_latent_space.png"), dpi=150)
         plt.show()
 
     # UMAP
@@ -297,6 +309,9 @@ def run_pca_umap(
                          label="0=n_test, 1=n_train, 2=low, 3=high")
             plt.grid(True)
             plt.tight_layout()
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, "umap_latent_space.png"), dpi=150)
             plt.show()
 
     return result

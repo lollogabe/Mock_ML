@@ -15,6 +15,7 @@ build/
 # Training artefacts (regeneratable — do NOT commit)
 logs/
 checkpoints/
+plots/
 
 # Data (large binary files — do NOT commit)
 data/raw/*.npz
