@@ -2,137 +2,130 @@
 # =============================================================================
 # setup_hpc.sh — Virtual environment setup for HPC clusters (CINECA & others)
 #
-# IMPORTANT: Run this script AFTER loading the right modules on the login node:
+# This script configures a Python environment on HPC clusters, placing the
+# virtual environment in fast scratch storage (not the slow $HOME directory).
+#
+# IMPORTANT: Run this script AFTER loading the right software modules:
 #
 #   module load profile/deeplrn          # CINECA deep-learning profile
-#   module load cuda/11.8                # or cuda/12.1
-#   module load python/3.10.8-gcc11.3    # or the version available on your cluster
+#   module load cuda/11.8                # (or cuda/12.1 if available)
+#   module load python/3.10.8-gcc11.3    # (or your cluster's Python version)
 #   bash setup_hpc.sh
 #
-# The venv is placed in $CINECA_SCRATCH (fast parallel storage at CINECA).
-# If $CINECA_SCRATCH is not defined (other HPCs), it falls back to $WORK,
-# then $SCRATCH, then the project directory itself.
+# Scratch storage resolution order (to avoid $HOME quota limits):
+#   1. $CINECA_SCRATCH — CINECA's dedicated fast storage (priority)
+#   2. $WORK               — Generic HPC work directory
+#   3. $SCRATCH            — Generic temporary scratch space
+#   4. Current directory   — Last resort if none above are available
+#
 # =============================================================================
 set -euo pipefail
 
-# ── Resolve best storage location ─────────────────────────────────────────────
-# Prefer fast scratch/work storage; avoid $HOME (small quota, slow I/O on HPC)
+# ── Source shared utilities ────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts/utils.sh"
+
+# ── Resolve best storage location for venv ─────────────────────────────────
+# Prefer fast HPC scratch storage; avoid $HOME (small quota, slow I/O)
+
 if [[ -n "${CINECA_SCRATCH:-}" ]]; then
     HPC_SCRATCH="$CINECA_SCRATCH"
+    echo "==> Using CINECA_SCRATCH: $HPC_SCRATCH"
 elif [[ -n "${WORK:-}" ]]; then
     HPC_SCRATCH="$WORK"
+    echo "==> Using WORK directory: $HPC_SCRATCH"
 elif [[ -n "${SCRATCH:-}" ]]; then
     HPC_SCRATCH="$SCRATCH"
+    echo "==> Using SCRATCH directory: $HPC_SCRATCH"
 else
-    HPC_SCRATCH="$(pwd)"          # last resort: project directory
-    echo "WARNING: No HPC scratch variable found; placing venv in project dir."
+    HPC_SCRATCH="$(pwd)"
+    echo "⚠️  WARNING: No HPC scratch variable found; using project directory"
 fi
 
 PROJECT_NAME="jet_anomaly"
 VENV_DIR="${HPC_SCRATCH}/${PROJECT_NAME}_venv"
 
-echo "==> HPC scratch  : ${HPC_SCRATCH}"
+echo "═══════════════════════════════════════════════════════════════════"
+echo "  HPC Python Environment Setup"
+echo "═══════════════════════════════════════════════════════════════════"
 echo "==> Venv location: ${VENV_DIR}"
 
-# ── Guard: ensure python3 is from the loaded module, not /usr/bin ─────────────
-PYTHON=$(command -v python3 || command -v python)
-PYTHON_VERSION=$("$PYTHON" --version 2>&1)
-echo "==> Using Python : ${PYTHON_VERSION} (${PYTHON})"
+# ── Verify Python comes from loaded modules ────────────────────────────────
+echo "==> Verifying Python from loaded modules…"
+PYTHON_PATH=$(verify_python)
 
-# ── Create venv ───────────────────────────────────────────────────────────────
-# --system-site-packages lets the venv inherit HPC-provided packages
-# (CUDA-aware mpi4py, cuDNN, etc.) without reinstalling them.
-# Remove that flag if you want a fully isolated environment.
-echo "==> Creating virtual environment at ${VENV_DIR}"
-"$PYTHON" -m venv --system-site-packages --copies "$VENV_DIR"
+# ── Create venv with system packages inheritance ────────────────────────────
+# --system-site-packages allows inheriting CUDA-aware packages from HPC modules
+# (mpi4py, cuDNN, etc.) without reinstalling; remove this flag if you need isolation
 
-# Write the venv path to a local dotfile so scripts can source it automatically
+echo "==> Creating virtual environment with --system-site-packages"
+create_venv "$VENV_DIR" --system-site-packages
+
+# Save venv path for later use
 echo "VENV_DIR=${VENV_DIR}" > .venv_path
-echo "==> Venv path written to .venv_path"
+echo "==> Venv path saved to .venv_path"
 
-# ── Activate ──────────────────────────────────────────────────────────────────
-# shellcheck disable=SC1091
+# ── Activate venv ──────────────────────────────────────────────────────────
 source "$VENV_DIR/bin/activate"
 
 echo "==> Upgrading pip / wheel / setuptools"
 pip install --quiet --upgrade pip wheel setuptools
 
-# ── Detect CUDA version from loaded module (nvidia-smi is available on login nodes) ──
-detect_cuda_wheel() {
-    if ! command -v nvidia-smi &>/dev/null; then
-        # Fall back to CUDA module name if nvidia-smi not on login node
-        if   module list 2>&1 | grep -q "cuda/12"; then echo "cu121"
-        elif module list 2>&1 | grep -q "cuda/11"; then echo "cu118"
-        else echo "cpu"; fi
-        return
-    fi
-    local ver
-    ver=$(nvidia-smi | grep -oP "CUDA Version: \K[0-9]+\.[0-9]+" 2>/dev/null || echo "")
-    if   [[ "$ver" == 12.* ]]; then echo "cu121"
-    elif [[ "$ver" == 11.* ]]; then echo "cu118"
-    else echo "cpu"; fi
-}
+# ── Detect CUDA and install PyTorch if needed ──────────────────────────────
+echo "==> Checking for PyTorch in system modules…"
 
-CUDA_WHEEL=${CUDA_WHEEL:-$(detect_cuda_wheel)}
-echo "==> PyTorch wheel target: ${CUDA_WHEEL}"
-
-# ── PyTorch ───────────────────────────────────────────────────────────────────
-# Skip if already provided by the HPC module (check with: python -c "import torch")
 if python -c "import torch" &>/dev/null; then
-    echo "==> torch already available from system modules — skipping pip install"
-    python -c "import torch; print(f'   torch {torch.__version__}, CUDA={torch.version.cuda}')"
+    echo "✓ PyTorch already available from system modules"
+    python -c "import torch; print(f'  Version: {torch.__version__}'); print(f'  CUDA: {torch.version.cuda if hasattr(torch, \"version\") else \"N/A\"}')"
 else
-    if [[ "$CUDA_WHEEL" == "cpu" ]]; then
-        pip install --quiet "torch>=2.0.0" "torchvision>=0.15.0"
-    else
-        pip install --quiet \
-            "torch>=2.0.0" "torchvision>=0.15.0" \
-            --index-url "https://download.pytorch.org/whl/${CUDA_WHEEL}"
-    fi
+    CUDA=$(detect_cuda)
+    echo "==> PyTorch not in system modules; installing for ${CUDA}"
+    install_pytorch "$CUDA"
 fi
 
-# ── Remaining dependencies ─────────────────────────────────────────────────────
-echo "==> Installing project requirements (excluding torch/torchvision)"
-# Filter out torch lines to avoid version conflicts with system-provided torch
-grep -v -E "^torch" requirements.txt | pip install --quiet -r /dev/stdin
+# ── Install remaining dependencies (excluding torch/torchvision) ────────────
+echo "==> Installing project requirements"
+install_requirements torch torchvision
 
-# ── Write activation helper script ────────────────────────────────────────────
-# Source this tiny helper anywhere in the project tree instead of hardcoding
-# the full venv path.
-cat > activate_env.sh <<ACTIVATE
+# ── Create activation helper script ────────────────────────────────────────
+# This can be sourced from anywhere in the project to activate the venv
+
+cat > activate_env.sh <<ACTIVATE_SCRIPT
 #!/usr/bin/env bash
-# Auto-generated by setup_hpc.sh — do NOT edit manually.
-# Usage:  source activate_env.sh
+# Auto-generated by setup_hpc.sh — do NOT edit manually
+# Usage: source activate_env.sh
+
 VENV_DIR="${VENV_DIR}"
-if [[ -f "\${VENV_DIR}/bin/activate" ]]; then
-    source "\${VENV_DIR}/bin/activate"
-    echo "Activated venv: \${VENV_DIR}"
-else
-    echo "ERROR: venv not found at \${VENV_DIR}. Re-run setup_hpc.sh."
+
+if [[ ! -f "\${VENV_DIR}/bin/activate" ]]; then
+    echo "ERROR: venv not found at \${VENV_DIR}" >&2
+    echo "Re-run setup_hpc.sh on the login node first." >&2
     exit 1
 fi
-ACTIVATE
 
-echo "==> Activation helper written to activate_env.sh"
+# shellcheck disable=SC1091
+source "\${VENV_DIR}/bin/activate"
+echo "✓ Activated venv: \${VENV_DIR}"
+ACTIVATE_SCRIPT
 
-# ── Verification ──────────────────────────────────────────────────────────────
-echo ""
-echo "==> Verifying installation"
-python - <<'EOF'
-import torch, numpy, sklearn, yaml, scipy, tqdm
-print(f"  torch      : {torch.__version__}  (CUDA available: {torch.cuda.is_available()})")
-if torch.cuda.is_available():
-    print(f"  CUDA       : {torch.version.cuda}")
-    print(f"  GPU        : {torch.cuda.get_device_name(0)}")
-print(f"  numpy      : {numpy.__version__}")
-print(f"  scikit-learn: {sklearn.__version__}")
-EOF
+chmod +x activate_env.sh
+echo "==> Activation helper created: activate_env.sh"
+
+# ── Verify installation ────────────────────────────────────────────────────
+verify_installation
 
 echo ""
-echo "╔═══════════════════════════════════════════════════════════════════════╗"
-echo "║  ✓  HPC setup complete!                                               ║"
-echo "╠═══════════════════════════════════════════════════════════════════════╣"
-echo "║  Activate  :  source activate_env.sh                                 ║"
-echo "║  OR        :  source ${VENV_DIR}/bin/activate"
-echo "║  Submit    :  sbatch submit_job.sh                                    ║"
-echo "╚═══════════════════════════════════════════════════════════════════════╝"
+echo "╔═══════════════════════════════════════════════════════════════════╗"
+echo "║  ✓  HPC Setup complete!                                           ║"
+echo "╠═══════════════════════════════════════════════════════════════════╣"
+echo "║  Activate environment:                                            ║"
+echo "║    source activate_env.sh                                         ║"
+echo "║  OR                                                               ║"
+echo "║    source ${VENV_DIR}/bin/activate                 ║"
+echo "║                                                                   ║"
+echo "║  Submit training job:                                             ║"
+echo "║    sbatch submit_job.sh                                           ║"
+echo "║                                                                   ║"
+echo "║  Submit with data skip (if already downloaded):                   ║"
+echo "║    sbatch --export=ALL,SKIP_PREPROCESS=1 submit_job.sh           ║"
+echo "╚═══════════════════════════════════════════════════════════════════╝"

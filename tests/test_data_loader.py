@@ -48,34 +48,47 @@ class TestLoadTensors:
 
 
 class TestBuildDataloaders:
-    def test_four_dataloaders_returned(self, mock_data_dir):
+    def test_five_dataloaders_returned(self, mock_data_dir):
         normal_t, low_t, high_t = load_tensors(data_dir=mock_data_dir)
         dls = build_dataloaders(normal_t, low_t, high_t,
-                                batch_size=8, test_frac=0.2, seed=42)
-        assert len(dls) == 4
+                                batch_size=8, test_frac=0.2, val_frac=0.1, seed=42)
+        assert len(dls) == 5
 
     def test_train_batch_size(self, mock_data_dir):
         normal_t, low_t, high_t = load_tensors(data_dir=mock_data_dir)
-        dl_train, _, _, _ = build_dataloaders(normal_t, low_t, high_t,
-                                              batch_size=8, test_frac=0.2, seed=42)
+        dl_train, dl_val, dl_test, dl_low, dl_high = build_dataloaders(
+            normal_t, low_t, high_t,
+            batch_size=8, test_frac=0.2, val_frac=0.1, seed=42)
         xb, yb = next(iter(dl_train))
         assert xb.shape[0] == 8       # batch size
         assert xb.shape[1:] == (1, 100, 100)
 
+    def test_val_batch_size_1(self, mock_data_dir):
+        normal_t, low_t, high_t = load_tensors(data_dir=mock_data_dir)
+        dl_train, dl_val, dl_test, dl_low, dl_high = build_dataloaders(
+            normal_t, low_t, high_t,
+            batch_size=8, test_frac=0.2, val_frac=0.1, seed=42)
+        xb, _ = next(iter(dl_val))
+        assert xb.shape[0] == 1       # validation uses batch_size=1
+
     def test_low_high_batch_size_1(self, mock_data_dir):
         normal_t, low_t, high_t = load_tensors(data_dir=mock_data_dir)
-        _, _, dl_low, dl_high = build_dataloaders(normal_t, low_t, high_t,
-                                                  batch_size=8, test_frac=0.2, seed=42)
+        dl_train, dl_val, dl_test, dl_low, dl_high = build_dataloaders(
+            normal_t, low_t, high_t,
+            batch_size=8, test_frac=0.2, val_frac=0.1, seed=42)
         xb, _ = next(iter(dl_low))
         assert xb.shape[0] == 1
 
     def test_train_test_split_sizes(self, mock_data_dir):
         normal_t, low_t, high_t = load_tensors(data_dir=mock_data_dir)
-        dl_train, dl_n_test, _, _ = build_dataloaders(
-            normal_t, low_t, high_t, batch_size=4, test_frac=0.2, seed=42
+        dl_train, dl_val, dl_test, _, _ = build_dataloaders(
+            normal_t, low_t, high_t, batch_size=4, test_frac=0.2, val_frac=0.1, seed=42
         )
         n_train_samples = sum(xb.shape[0] for xb, _ in dl_train)
-        n_test_samples  = sum(xb.shape[0] for xb, _ in dl_n_test)
-        # 80 train (drop_last may drop 0), 20 test
+        n_val_samples   = sum(xb.shape[0] for xb, _ in dl_val)
+        n_test_samples  = sum(xb.shape[0] for xb, _ in dl_test)
+        # 100 total: ~70 train, ~10 val, ~20 test (batch_size=4, drop_last=True for train)
         assert n_test_samples == 20
+        assert n_val_samples == 10
+        assert n_train_samples >= 68  # drop_last=True may remove some
         assert n_train_samples <= 80

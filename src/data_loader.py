@@ -113,40 +113,50 @@ def build_dataloaders(
     high_t: torch.Tensor,
     batch_size: int = 64,
     test_frac: float = 0.2,
+    val_frac: float = 0.1,
     seed: int = 42,
-) -> Tuple[DataLoader, DataLoader, DataLoader, DataLoader]:
-    """Split the normal dataset and build four DataLoaders.
+) -> Tuple[DataLoader, DataLoader, DataLoader, DataLoader, DataLoader]:
+    """Split the normal dataset and build five DataLoaders.
 
-    The normal dataset is split into train (1 - test_frac) and test
-    (test_frac) subsets.  Low and high test datasets are used as-is.
+    The normal dataset is split into train, validation, and test subsets:
+      • train:  (1 - test_frac - val_frac) of normal data
+      • val:    val_frac of normal data
+      • test:   test_frac of normal data (held-out, not used during training)
+    
+    Low and high anomaly datasets are used for evaluation only.
 
     Args:
         normal_t:   Normal jet tensor, shape (N, 1, 100, 100).
         low_t:      Low-anomaly tensor.
         high_t:     High-anomaly tensor.
         batch_size: Mini-batch size for the training DataLoader.
-        test_frac:  Fraction of normal data to keep as held-out test set.
-        seed:       Manual seed for the train/test split.
+        test_frac:  Fraction of normal data to keep as held-out test set (default 0.2).
+        val_frac:   Fraction of normal data to use as validation set (default 0.1).
+        seed:       Manual seed for the train/val/test split.
 
     Returns:
-        (dl_train, dl_n_test, dl_low, dl_high)
+        (dl_train, dl_val, dl_n_test, dl_low, dl_high)
     """
     dataset_n = TensorDataset(normal_t, normal_t)
 
     n_total = len(dataset_n)
     n_test  = int(test_frac * n_total)
-    n_train = n_total - n_test
+    n_val   = int(val_frac * n_total)
+    n_train = n_total - n_test - n_val
 
     generator = torch.Generator().manual_seed(seed)
-    train_ds, test_ds = random_split(dataset_n, [n_train, n_test], generator=generator)
+    train_ds, val_ds, test_ds = random_split(
+        dataset_n, [n_train, n_val, n_test], generator=generator
+    )
 
     dl_train  = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  drop_last=True)
+    dl_val    = DataLoader(val_ds,   batch_size=1,          shuffle=False)
     dl_n_test = DataLoader(test_ds,  batch_size=1,          shuffle=False)
     dl_low    = DataLoader(TensorDataset(low_t,  low_t),  batch_size=1, shuffle=False)
     dl_high   = DataLoader(TensorDataset(high_t, high_t), batch_size=1, shuffle=False)
 
     logger.info(
         f"DataLoaders — train: {len(train_ds)} samples, "
-        f"n_test: {len(test_ds)}, low: {len(low_t)}, high: {len(high_t)}"
+        f"val: {len(val_ds)}, test: {len(test_ds)}, low: {len(low_t)}, high: {len(high_t)}"
     )
-    return dl_train, dl_n_test, dl_low, dl_high
+    return dl_train, dl_val, dl_n_test, dl_low, dl_high

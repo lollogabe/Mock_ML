@@ -37,11 +37,14 @@ load_dotenv()
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Evaluate the trained CERN jet AE.")
-    p.add_argument("--config",     type=str, default="configs/config.yaml")
-    p.add_argument("--checkpoint", type=str, default="checkpoints/ae_best.pt")
-    p.add_argument("--device",     type=str, default=None)
-    p.add_argument("--no-plot",    action="store_true", help="Suppress figures")
-    p.add_argument("--no-umap",    action="store_true", help="Skip UMAP (slow)")
+    p.add_argument("--config",          type=str, default="configs/config.yaml")
+    p.add_argument("--checkpoint",      type=str, default="checkpoints/ae_best.pt")
+    p.add_argument("--device",          type=str, default=None)
+    p.add_argument("--no-plot",         action="store_true", help="Suppress all figures")
+    p.add_argument("--no-umap",         action="store_true", help="Skip UMAP (slow)")
+    p.add_argument("--no-metrics",      action="store_true", help="Skip anomaly detection metrics")
+    p.add_argument("--no-dimensionality", action="store_true", help="Skip PCA/UMAP dimensionality reduction")
+    p.add_argument("--no-gmm",          action="store_true", help="Skip GMM clustering")
     return p.parse_args()
 
 
@@ -65,10 +68,11 @@ def main() -> None:
     download_data(group=group, data_dir=data_dir)
     normal_t, low_t, high_t = load_tensors(data_dir=data_dir)
 
-    dl_train, dl_n_test, dl_low, dl_high = build_dataloaders(
+    dl_train, dl_val, dl_n_test, dl_low, dl_high = build_dataloaders(
         normal_t, low_t, high_t,
         batch_size=cfg.get("batch_size", 64),
         test_frac=cfg.get("test_frac", 0.2),
+        val_frac=cfg.get("val_frac", 0.1),
         seed=cfg.get("seed", 42),
     )
 
@@ -82,62 +86,80 @@ def main() -> None:
 
     plot = not args.no_plot
 
-    # ── Latent embeddings ─────────────────────────────────────────────────────
-    logger.info("Computing latent embeddings …")
-    Z_train   = compute_latent_embeddings(model, dl_train,  device)
-    Z_n_test  = compute_latent_embeddings(model, dl_n_test, device)
-    Z_low     = compute_latent_embeddings(model, dl_low,    device)
-    Z_high    = compute_latent_embeddings(model, dl_high,   device)
-    Z_all     = torch.cat([Z_high, Z_train, Z_n_test, Z_low], dim=0)
+    # ── Metrics: Latent embeddings & anomaly scores ────────────────────────────
+    if not args.no_metrics:
+        logger.info("Computing latent embeddings …")
+        Z_train   = compute_latent_embeddings(model, dl_train,  device)
+        Z_n_test  = compute_latent_embeddings(model, dl_n_test, device)
+        Z_low     = compute_latent_embeddings(model, dl_low,    device)
+        Z_high    = compute_latent_embeddings(model, dl_high,   device)
+        Z_all     = torch.cat([Z_high, Z_train, Z_n_test, Z_low], dim=0)
 
-    # ── Normal statistics ─────────────────────────────────────────────────────
-    centroid, precision = compute_normal_statistics(Z_train)
+        # ── Normal statistics ─────────────────────────────────────────────────────
+        centroid, precision = compute_normal_statistics(Z_train)
 
-    # ── Anomaly scores ────────────────────────────────────────────────────────
-    logger.info("Computing reconstruction losses …")
-    loss_n_train = compute_reconstruction_losses(model, dl_train,  device)
-    loss_n_test  = compute_reconstruction_losses(model, dl_n_test, device)
-    loss_h       = compute_reconstruction_losses(model, dl_high,   device)
-    loss_l       = compute_reconstruction_losses(model, dl_low,    device)
+        # ── Anomaly scores ────────────────────────────────────────────────────────
+        logger.info("Computing reconstruction losses …")
+        loss_n_train = compute_reconstruction_losses(model, dl_train,  device)
+        loss_n_test  = compute_reconstruction_losses(model, dl_n_test, device)
+        loss_h       = compute_reconstruction_losses(model, dl_high,   device)
+        loss_l       = compute_reconstruction_losses(model, dl_low,    device)
 
-    logger.info("Computing Mahalanobis distances …")
-    dist_n_train = compute_mahalanobis(Z_train,  centroid, precision).numpy()
-    dist_n_test  = compute_mahalanobis(Z_n_test, centroid, precision).numpy()
-    dist_h       = compute_mahalanobis(Z_high,   centroid, precision).numpy()
-    dist_l       = compute_mahalanobis(Z_low,    centroid, precision).numpy()
+        logger.info("Computing Mahalanobis distances …")
+        dist_n_train = compute_mahalanobis(Z_train,  centroid, precision).numpy()
+        dist_n_test  = compute_mahalanobis(Z_n_test, centroid, precision).numpy()
+        dist_h       = compute_mahalanobis(Z_high,   centroid, precision).numpy()
+        dist_l       = compute_mahalanobis(Z_low,    centroid, precision).numpy()
 
-    fpr = cfg.get("fpr_threshold", 0.10)
+        fpr = cfg.get("fpr_threshold", 0.10)
 
-    # ── Thresholding ──────────────────────────────────────────────────────────
-    logger.info("Finding anomalies via MSE loss …")
-    loss_lbl_train, loss_lbl_test, loss_lbl_low, loss_lbl_high = find_anomalies(
-        loss_n_train, loss_n_test, loss_h, loss_l,
-        fpr_threshold=fpr, score_type="Loss (MSE)", plot=plot, save_dir="plots",
-    )
+        # ── Thresholding ──────────────────────────────────────────────────────
+        logger.info("Finding anomalies via MSE loss …")
+        loss_lbl_train, loss_lbl_test, loss_lbl_low, loss_lbl_high = find_anomalies(
+            loss_n_train, loss_n_test, loss_h, loss_l,
+            fpr_threshold=fpr, score_type="Loss (MSE)", plot=plot, save_dir="plots",
+        )
 
-    logger.info("Finding anomalies via Mahalanobis distance …")
-    dist_lbl_train, dist_lbl_test, dist_lbl_low, dist_lbl_high = find_anomalies(
-        dist_n_train, dist_n_test, dist_h, dist_l,
-        fpr_threshold=fpr, score_type="Mahalanobis distance", plot=plot, save_dir="plots",
-    )
+        logger.info("Finding anomalies via Mahalanobis distance …")
+        dist_lbl_train, dist_lbl_test, dist_lbl_low, dist_lbl_high = find_anomalies(
+            dist_n_train, dist_n_test, dist_h, dist_l,
+            fpr_threshold=fpr, score_type="Mahalanobis distance", plot=plot, save_dir="plots",
+        )
+    else:
+        logger.info("Skipping metrics computation (--no-metrics)")
+        Z_all = None
+        loss_lbl_low = None
+        loss_lbl_high = None
+        dist_lbl_low = None
+        dist_lbl_high = None
 
     # ── Dimensionality reduction ───────────────────────────────────────────────
-    labels = np.concatenate([
-        np.full(len(Z_high),   3),
-        np.full(len(Z_train),  1),
-        np.full(len(Z_n_test), 0),
-        np.full(len(Z_low),    2),
-    ])
-    run_pca_umap(Z_all, labels, plot=plot, use_umap=not args.no_umap, save_dir="plots")
+    if not args.no_dimensionality and Z_all is not None:
+        labels = np.concatenate([
+            np.full(len(Z_high),   3),
+            np.full(len(Z_train),  1),
+            np.full(len(Z_n_test), 0),
+            np.full(len(Z_low),    2),
+        ])
+        run_pca_umap(Z_all, labels, plot=plot, use_umap=not args.no_umap, save_dir="plots")
+    elif not args.no_dimensionality:
+        logger.warn("Skipping dimensionality reduction — metrics were skipped (--no-metrics)")
+    else:
+        logger.info("Skipping dimensionality reduction (--no-dimensionality)")
 
     # ── GMM ───────────────────────────────────────────────────────────────────
-    logger.info("Running GMM clustering …")
-    gmm_results = run_gmm(
-        Z_train, Z_all,
-        loss_lbl_low, loss_lbl_high,
-        dist_lbl_low, dist_lbl_high,
-        fpr_threshold=fpr,
-    )
+    if not args.no_gmm and loss_lbl_low is not None and dist_lbl_low is not None:
+        logger.info("Running GMM clustering …")
+        gmm_results = run_gmm(
+            Z_train, Z_all,
+            loss_lbl_low, loss_lbl_high,
+            dist_lbl_low, dist_lbl_high,
+            fpr_threshold=fpr,
+        )
+    elif not args.no_gmm:
+        logger.warn("Skipping GMM — required metrics were skipped")
+    else:
+        logger.info("Skipping GMM clustering (--no-gmm)")
 
     logger.info("Evaluation complete.")
 

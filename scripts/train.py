@@ -61,10 +61,11 @@ def main() -> None:
     download_data(group=group, data_dir=data_dir)
     normal_t, low_t, high_t = load_tensors(data_dir=data_dir)
 
-    dl_train, dl_n_test, dl_low, dl_high = build_dataloaders(
+    dl_train, dl_val, dl_n_test, dl_low, dl_high = build_dataloaders(
         normal_t, low_t, high_t,
         batch_size=cfg.get("batch_size", 64),
         test_frac=cfg.get("test_frac", 0.2),
+        val_frac=cfg.get("val_frac", 0.1),
         seed=seed,
     )
 
@@ -86,21 +87,49 @@ def main() -> None:
     epochs = args.epochs or cfg.get("epochs", 20)
     logger.info(f"Starting training — {epochs} epochs on {device}")
 
-    loss_history = train(
+    train_losses, val_losses = train(
         model=model,
         dataloader=dl_train,
         optimizer=optimizer,
         loss_fn=loss_fn,
         device=device,
         epochs=epochs,
+        val_dataloader=dl_val,
         checkpoint_dir=checkpoint_dir,
         log_dir=log_dir,
     )
 
     logger.info(
-        f"Training complete. Final loss: {loss_history[-1]:.6f}  "
-        f"Best loss: {min(loss_history):.6f}"
+        f"Training complete. Final train loss: {train_losses[-1]:.6f}  "
+        f"Best train loss: {min(train_losses):.6f}"
     )
+    if val_losses:
+        logger.info(
+            f"Final val loss: {val_losses[-1]:.6f}  "
+            f"Best val loss: {min(val_losses):.6f}"
+        )
+
+    # ── Plot training curves ──────────────────────────────────────────────────
+    import matplotlib.pyplot as plt
+    
+    plot_dir = cfg.get("plot_dir", os.getenv("PLOT_DIR", "plots"))
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
+    ax.plot(train_losses, label="Training Loss", linewidth=2, marker="o", markersize=4)
+    if val_losses:
+        ax.plot(val_losses, label="Validation Loss", linewidth=2, marker="s", markersize=4)
+    ax.set_xlabel("Epoch", fontsize=12)
+    ax.set_ylabel("Loss", fontsize=12)
+    ax.set_title("Training Progress", fontsize=14, fontweight="bold")
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(range(0, len(train_losses), max(1, len(train_losses) // 10)))
+    
+    plot_path = os.path.join(plot_dir, "training_loss.png")
+    fig.savefig(plot_path, dpi=100, bbox_inches="tight")
+    logger.info(f"Training loss plot saved → {plot_path}")
+    plt.close(fig)
 
 
 if __name__ == "__main__":

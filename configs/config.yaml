@@ -10,6 +10,7 @@ data_dir: data/raw       # Where to save / load .npz files
 # ── Directories ───────────────────────────────────────────────────────────────
 checkpoint_dir: checkpoints
 log_dir:        logs
+plot_dir:       plots
 
 # ── Model ──────────────────────────────────────────────────────────────────────
 hidden_channels: 32    # Base channel count in conv layers
@@ -17,7 +18,8 @@ latent_dim:       4    # Bottleneck dimensionality
 
 # ── Training ───────────────────────────────────────────────────────────────────
 batch_size:    64
-test_frac:     0.2     # Fraction of normal data held out as validation set
+test_frac:     0.2     # Fraction of normal data held out as test set (not for validation)
+val_frac:      0.1     # Fraction of normal data used for validation during training
 seed:          42      # Global random seed for reproducibility
 lr:            1.0e-3  # Adam learning rate
 weight_decay:  1.0e-5  # Adam L2 regularisation
