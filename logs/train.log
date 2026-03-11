@@ -1,0 +1,20 @@
+2026-03-11 12:17:17  INFO      src.utils — Logging initialised. Log file: logs/train.log
+2026-03-11 12:17:17  INFO      src.utils — Seed set to 42
+2026-03-11 12:17:17  INFO      __main__ — Seed: 42
+2026-03-11 12:17:17  INFO      src.utils — Using device: cpu
+2026-03-11 12:17:17  INFO      src.data_loader — Already present: data/raw/Normal_data.npz
+2026-03-11 12:17:17  INFO      src.data_loader — Already present: data/raw/Test_data_low.npz
+2026-03-11 12:17:17  INFO      src.data_loader — Already present: data/raw/Test_data_high.npz
+2026-03-11 12:17:19  INFO      src.data_loader — Loaded tensors — normal: (12000, 1, 100, 100), low: (3000, 1, 100, 100), high: (3000, 1, 100, 100)
+2026-03-11 12:17:19  INFO      src.data_loader — DataLoaders — train: 8400 samples, val: 1200, test: 2400, low: 3000, high: 3000
+2026-03-11 12:17:19  INFO      src.model — Model built — 400,005 trainable parameters
+2026-03-11 12:17:21  INFO      __main__ — Starting training — 2 epochs on cpu
+2026-03-11 12:18:11  INFO      src.train — Epoch 001/2  train_loss=0.077603  val_loss=0.017348  time=50.2s
+2026-03-11 12:18:11  INFO      src.utils — Checkpoint saved → checkpoints/ae_epoch_001.pt
+2026-03-11 12:18:11  INFO      src.utils — Checkpoint saved → checkpoints/ae_best.pt
+2026-03-11 12:18:50  INFO      src.train — Epoch 002/2  train_loss=0.003739  val_loss=0.024478  time=39.1s
+2026-03-11 12:18:50  INFO      src.utils — Checkpoint saved → checkpoints/ae_epoch_002.pt
+2026-03-11 12:18:50  INFO      src.train — Training complete — best loss: 0.017348
+2026-03-11 12:18:50  INFO      __main__ — Training complete. Final train loss: 0.003739  Best train loss: 0.003739
+2026-03-11 12:18:50  INFO      __main__ — Final val loss: 0.024478  Best val loss: 0.017348
+2026-03-11 12:18:56  INFO      __main__ — Training loss plot saved → plots/training_loss.png

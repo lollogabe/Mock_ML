@@ -107,7 +107,8 @@ create_venv() {
     #     create_venv /path/to/venv          # basic setup
     #     create_venv /path/to/venv --system-site-packages  # inherit system packages
     local venv_path="$1"
-    local venv_flags=("${@:2}")  # all args after first
+    local venv_flags=()
+    [[ $# -gt 1 ]] && venv_flags=("${@:2}")  # collect extra args if present
 
     if [[ -d "$venv_path" ]]; then
         echo "==> Removing existing venv at $venv_path"
@@ -117,7 +118,7 @@ create_venv() {
     echo "==> Creating virtual environment at $venv_path"
     # Use detected Python executable or fall back to python3
     local python_exe="${PYTHON:-python3}"
-    "$python_exe" -m venv "${venv_flags[@]}" "$venv_path"
+    "$python_exe" -m venv ${venv_flags[@]+"${venv_flags[@]}"} "$venv_path"
 }
 
 activate_venv() {

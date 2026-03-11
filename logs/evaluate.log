@@ -1,0 +1,26 @@
+2026-03-11 12:19:10  INFO      src.utils — Logging initialised. Log file: logs/evaluate.log
+2026-03-11 12:19:10  INFO      src.utils — Seed set to 42
+2026-03-11 12:19:10  INFO      src.utils — Using device: cpu
+2026-03-11 12:19:10  INFO      src.data_loader — Already present: data/raw/Normal_data.npz
+2026-03-11 12:19:10  INFO      src.data_loader — Already present: data/raw/Test_data_low.npz
+2026-03-11 12:19:10  INFO      src.data_loader — Already present: data/raw/Test_data_high.npz
+2026-03-11 12:19:12  INFO      src.data_loader — Loaded tensors — normal: (12000, 1, 100, 100), low: (3000, 1, 100, 100), high: (3000, 1, 100, 100)
+2026-03-11 12:19:12  INFO      src.data_loader — DataLoaders — train: 8400 samples, val: 1200, test: 2400, low: 3000, high: 3000
+2026-03-11 12:19:12  INFO      src.model — Model built — 400,005 trainable parameters
+2026-03-11 12:19:12  INFO      src.utils — Checkpoint loaded ← checkpoints/ae_best.pt
+2026-03-11 12:19:12  INFO      __main__ — Computing latent embeddings …
+2026-03-11 12:19:23  INFO      src.evaluate — Normal statistics computed — centroid: torch.Size([4]), precision: torch.Size([4, 4])
+2026-03-11 12:19:23  INFO      __main__ — Computing reconstruction losses …
+2026-03-11 12:19:52  INFO      __main__ — Computing Mahalanobis distances …
+2026-03-11 12:19:52  INFO      __main__ — Finding anomalies via MSE loss …
+2026-03-11 12:19:52  INFO      src.evaluate — [Loss (MSE)] threshold=0.004621 | f_train=0.107  f_test=0.447  f_low=0.529  f_high=0.948
+2026-03-11 12:19:53  INFO      src.evaluate — Saved plot: loss_mse
+2026-03-11 12:20:00  INFO      __main__ — Finding anomalies via Mahalanobis distance …
+2026-03-11 12:20:00  INFO      src.evaluate — [Mahalanobis distance] threshold=2.853535 | f_train=0.100  f_test=0.101  f_low=0.136  f_high=0.281
+2026-03-11 12:20:00  INFO      src.evaluate — Saved plot: mahalanobis_distance
+2026-03-11 12:20:15  INFO      src.evaluate — PCA explained variance: 38.8% + 31.5%
+2026-03-11 12:20:18  WARNING   src.evaluate — umap-learn not installed. Skipping UMAP.
+2026-03-11 12:20:18  INFO      __main__ — Running GMM clustering …
+2026-03-11 12:20:25  INFO      src.evaluate — GMM Strategy 1 — purity (loss) low=0.529 high=0.948
+2026-03-11 12:20:26  INFO      src.evaluate — GMM Strategy 2 — purity (loss) low=0.529 high=0.948
+2026-03-11 12:20:26  INFO      __main__ — Evaluation complete.

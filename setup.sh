@@ -16,11 +16,24 @@
 # =============================================================================
 set -euo pipefail
 
+# ── Find best compatible Python version ────────────────────────────────────
+# numba/llvmlite have issues with Python 3.12 on macOS; prefer 3.11 or 3.10
+find_best_python() {
+    for py_ver in python3.11 python3.10 python3.9 python3; do
+        if command -v "$py_ver" &>/dev/null; then
+            echo "$py_ver"
+            return 0
+        fi
+    done
+    echo "python3"  # fallback
+}
+
+PYTHON=${PYTHON:-$(find_best_python)}
+
 # ── Source shared utilities ────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/utils.sh"
 
-PYTHON=${PYTHON:-python3}
 VENV_DIR=${VENV_DIR:-"venv"}
 
 echo "═══════════════════════════════════════════════════════════════════"

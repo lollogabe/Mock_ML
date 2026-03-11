@@ -1,503 +1,428 @@
-# Running on Google Colab — Complete Guide
+# Google Colab Setup Guide — Complete Workflow
 
-> Updated workflow: cleaner, tested against actual Colab environment restrictions
+Esegui il progetto CERN Jet Anomaly Detection su Google Colab gratuitamente con GPU T4/V100.
 
-## TL;DR — Quick Start
+⏱️ **Setup**: 3 minuti | **Training**: 35-45 minuti | **Evaluation**: 3-5 minuti
 
+---
+
+## 🎯 Cosa Troverai
+
+- Setup completo automatico (Python dependencies)
+- Download datasets da CERN
+- Training Autoencoder su GPU Colab
+- Evaluation con visualizzazioni (PCA, UMAP)
+- Salvataggio modelli e risultati
+
+---
+
+## 📌 Prerequisiti
+
+1. ✅ Account Google (gratuito)
+2. ✅ Acceso a [Google Colab](https://colab.research.google.com)
+3. ✅ ~2 GB spazio storage temporaneo (ephemeral, wiped after session)
+
+---
+
+## 🚀 Quick Start (Copy-Paste)
+
+Apri [Google Colab](https://colab.research.google.com), crea nuovo notebook, e esegui questi comandi in ordine:
+
+### Cell 1: Clone Repository + Setup
 ```python
-# Cell 1: Clone (HTTPS — simplest, no auth needed for public repos)
 import os
 os.chdir('/content')
+
+# Clone repo (HTTPS, nessuna auth richiesta)
 !git clone https://github.com/lollogabe/Mock_ML.git
 %cd Mock_ML
 
-# Cell 2: Setup
-!python colab_setup.py --setup
-
-# Cell 3: Download Data
-!python scripts/preprocess.py --group 37
-
-# Cell 4: Train (35-45 min on T4 GPU)
-!python scripts/train.py --config configs/config.yaml --device cuda
-
-# Cell 5: Evaluate
-!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
-
-# Cell 6: (OPTIONAL) Push results back to Git
-# Only needed if you want to save training logs to repo
-# See "Pushing Results Back" section below
-```
-
----
-
-## Why Colab Is Different (And How We Handle It)
-
-| Aspect | Local / HPC | Colab | Solution |
-|--------|-------------|-------|----------|
-| **Shell Scripts** | ✅ Works | ❌ Limited | Use Python helper (`colab_setup.py`) |
-| **Package Installation** | Manual | ✅ Automatic Python env | Use `pip` directly |
-| **Git SSH Keys** | System-wide | ⚠️ Isolated sandbox | Store key in Secrets, load in Python |
-| **File System** | Persistent | 🔄 Ephemeral | Download results before session ends |
-| **GPU** | Optional | ✅ Always available | Auto-detect and use |
-
----
-
-## Prerequisites
-
-### **Before You Start**
-
-1. **Repository on GitHub:** Push your project to GitHub/GitLab (required for cloning in Colab)
-   ```bash
-   # On your local machine
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git remote add origin https://github.com/YOUR_USERNAME/Mock_ML.git
-   git push -u origin main
-   ```
-
-2. **SSH Key Set Up (for git@github.com authentication):**
-   - Generate key locally: `ssh-keygen -t ed25519 -C "your_email@example.com"`
-   - Add to GitHub: [github.com/settings/keys](https://github.com/settings/keys)
-   - OR use token-based auth (see Step 1.2 below)
-
----
-
-## Step 1: Setup Colab Environment
-
-### **Usually You Need Nothing!**
-
-For **cloning** the repo:
-- ✅ Public repo: Just use HTTPS (no authentication)
-- ✅ Private repo: Use token (see below)
-
-```python
-import os
-os.chdir('/content')
-
-# Public repo — no auth needed
-!git clone https://github.com/lollogabe/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned")
-```
-
----
-
-### **Option A: GitHub Token (For Pushing Results Back)**
-
-Use a **Personal Access Token** if you want to **push training logs back to Git**.
-
-#### **Step 1a: Create Token on GitHub**
-
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Click **"Generate new token"** → **"Generate new token (classic)"**
-3. Set:
-   - **Token name:** `Colab-Training`
-   - **Expiration:** 90 days (or longer)
-   - **Scopes:** Check only ✅ `repo` (full control of private repositories)
-4. Click **"Generate token"**
-5. **Copy the token** (it only shows once!)
-
-#### **Step 1b: Store Token in Colab Secrets**
-
-1. In your Colab notebook, click **🔑 Secrets** (left sidebar)
-2. Click **+ Add new secret**
-3. **Name:** `GITHUB_TOKEN`
-4. **Value:** Paste your token
-5. Click **"Add secret"**
-
-#### **Step 1c: Clone with Token**
-
-```python
-from google.colab import userdata
-import os
-
-os.chdir('/content')
-
-# Get token from Secrets
-token = userdata.get('GITHUB_TOKEN')
-
-# Clone using token (works for both public and private repos)
-!git clone https://{token}@github.com/lollogabe/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned with token authentication")
-```
-
-Then continue to Step 2 (setup).
-
-**⚠️ Security Note:** The token is stored in Colab Secrets (encrypted). Colab doesn't log shell commands, so the token won't be exposed. Best practice: Delete the token on GitHub after you're done training.
-
----
-
-### **Option B: Public Repo (No Auth Needed)**
-
-If your repo is public, just clone directly:
-
-```python
-import os
-os.chdir('/content')
-
-!git clone https://github.com/lollogabe/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned (no authentication needed)")
-```
-
----
-
-## Step 2: Install Dependencies
-
-Use the provided **Colab setup helper**:
-
-```python
+# Setup l'ambiente
 !python colab_setup.py --setup
 ```
 
-This:
-- ✅ Detects CUDA version
-- ✅ Installs PyTorch with correct CUDA support
-- ✅ Installs all project dependencies
-- ✅ Verifies installation
-- ✅ Shows GPU info
-
-**Expected output:**
+**Output atteso:**
 ```
-═══════════════════════════════════════════════════════════════
-  Google Colab Setup for Mock_ML Project
-═══════════════════════════════════════════════════════════════
-==> Detecting CUDA version...
-  CUDA available but version unclear, using cu121 (safe default)
-==> Installing PyTorch for cu121
-==> Installing project requirements (excluding torch/torchvision)
-==> Verifying installation
-  torch      : 2.3.0  (CUDA: True)
-  numpy      : 1.24.3
-  scikit-learn: 1.3.2
-  matplotlib : 3.8.2
-  yaml       : 6.0.1
-  GPU Device: Tesla T4
-  GPU Memory: 15.0 GB
+Cloning into 'Mock_ML'...
+remote: Counting objects: ...
+Installing dependencies...
+✓ All dependencies installed successfully
+✓ Colab environment ready
 ```
 
 ---
 
-## Step 3: Download Data
-
+### Cell 2: Download Data
 ```python
-!python scripts/preprocess.py --group 37
+!python scripts/preprocess.py --group 37 --data-dir data/raw
 ```
 
-**Time:** ~2 minutes
-**Output:** `data/raw/Normal_data.npz`, `Test_data_low.npz`, `Test_data_high.npz`
+**Output atteso:**
+```
+Downloading Normal_data.npz from ... (12000 samples)
+Downloading Test_data_low.npz from ... (3000 samples)
+Downloading Test_data_high.npz from ... (3000 samples)
+All files downloaded successfully
+```
+
+⏱️ **Tempo**: 2-10 minuti (dipende da connessione internet)
 
 ---
 
-## Step 4: Train Model
-
-```python
-# Full training (20 epochs on T4 GPU: ~40 min)
-!python scripts/train.py --config configs/config.yaml --device cuda
-
-# Quick test (2 epochs for debugging: ~4 min)
-# !python scripts/train.py --config configs/config.yaml --device cuda --epochs 2
-```
-
-**Expected output:**
-```
-==> CUDA target: cu121
-==> Training on device: cuda (Tesla T4)
-
-Epoch 001/020  train_loss=0.512345  val_loss=0.498765  time=1.92s
-Epoch 002/020  train_loss=0.456789  val_loss=0.442134  time=1.90s
-...
-Epoch 020/020  train_loss=0.201234  val_loss=0.204567  time=1.89s
-
-✓ Training complete
-✓ Best checkpoint: checkpoints/ae_best.pt
-✓ Training logs: logs/train_loss.csv
-```
-
----
-
-## Step 5: Evaluate Model
-
-```python
-# Evaluate (skip slow UMAP in Colab)
-!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot --no-umap
-```
-
-**Output:**
-- Anomaly scores (MSE, Mahalanobis distance)
-- PCA visualization
-- GMM clustering results
-- Evaluation metrics (AUC, precision, recall)
-
----
-
-## Step 6: Download Results
-
-### **Option A: Direct Browser Download**
-
-```python
-from google.colab import files
-
-# Download checkpoint
-files.download('checkpoints/ae_best.pt')
-
-# Download training logs
-files.download('logs/train_loss.csv')
-
-# Download plots
-files.download('plots/training_loss.png')
-files.download('plots/anomaly_scores_mse.png')
-```
-
-Files appear in your Downloads folder.
-
-### **Option B: Save to Google Drive (for large files)**
-
-```python
-from google.colab import drive
-
-# Mount Drive
-drive.mount('/content/drive')
-
-# Copy results to Drive
-!mkdir -p /content/drive/MyDrive/Mock_ML_results
-!cp -r checkpoints /content/drive/MyDrive/Mock_ML_results/
-!cp -r logs /content/drive/MyDrive/Mock_ML_results/
-!cp -r plots /content/drive/MyDrive/Mock_ML_results/
-
-print("✓ Results saved to Google Drive")
-```
-
----
-
-## Step 7: Push Results Back to Git (Optional)
-
-Only do this if you want to save **training logs** to your repository.
-
-**⚠️ Important:** Don't push large checkpoint files (.pt) — they're too big for Git. Download them separately instead.
-
-### **Using GitHub Token (Recommended)**
-
-```python
-from google.colab import userdata
-import subprocess
-import os
-
-# Get token from Colab Secrets (set up in Step 1)
-token = userdata.get('GITHUB_TOKEN')
-
-# Configure Git with your info
-subprocess.run('git config user.email "your_email@example.com"', shell=True)
-subprocess.run('git config user.name "Your Name"', shell=True)
-
-# Add training results (NOT the checkpoint)
-!git add logs/train_loss.csv plots/training_loss.png
-
-# Commit
-!git commit -m "Training results from Colab - GPU run
-
-- Trained for 20 epochs on Tesla T4
-- Best validation loss: 0.204567
-- Training time: ~40 min"
-
-# Push using token (automatically embedded in URL)
-url = f"https://{token}@github.com/lollogabe/Mock_ML.git"
-result = subprocess.run(f'git remote set-url origin {url}', shell=True, capture_output=True)
-!git push origin main
-
-print("✓ Results pushed to Git")
-```
-
-**That's it!** No SSH key management needed.
-
-### **Cleanup After Training (Security)**
-
-After training is complete, delete the token on GitHub:
-
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Find `Colab-Training`
-3. Click **Delete**
-
-The token becomes inactive immediately. Safe!
-
----
-
-### **If You Don't Want to Push Results**
-
-Just download the checkpoint and logs locally (Step 6) — no Git push needed!
-
-```python
-from google.colab import files
-
-files.download('checkpoints/ae_best.pt')
-files.download('logs/train_loss.csv')
-files.download('plots/training_loss.png')
-
-print("✓ Results downloaded locally")
-# Then commit these to Git on your Mac if you want
-```
-
----
-
-## Complete Colab Notebook Template
-
-Create a Colab notebook with these cells in order:
-
-**Option A: Just Download Results (Simplest — no token needed)**
-
-```python
-# === CELL 1: Clone ===
-import os
-os.chdir('/content')
-!git clone https://github.com/lollogabe/Mock_ML.git
-%cd Mock_ML
-print("✓ Cloned")
-
-# === CELL 2: Setup ===
-!python colab_setup.py --setup
-
-# === CELL 3: Data ===
-!python scripts/preprocess.py --group 37
-
-# === CELL 4: Train ===
-!python scripts/train.py --config configs/config.yaml --device cuda
-
-# === CELL 5: Evaluate ===
-!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
-
-# === CELL 6: Download Results ===
-from google.colab import files
-files.download('checkpoints/ae_best.pt')
-files.download('logs/train_loss.csv')
-files.download('plots/training_loss.png')
-print("✓ Downloaded!")
-```
-
----
-
-**Option B: Push Results to Git (With Token)**
-
-```python
-# === CELL 1: Clone with Token ===
-from google.colab import userdata
-import os
-
-os.chdir('/content')
-token = userdata.get('GITHUB_TOKEN')  # Stored in Secrets
-!git clone https://{token}@github.com/lollogabe/Mock_ML.git
-%cd Mock_ML
-print("✓ Cloned with token")
-
-# === CELL 2: Setup ===
-!python colab_setup.py --setup
-
-# === CELL 3: Data ===
-!python scripts/preprocess.py --group 37
-
-# === CELL 4: Train ===
-!python scripts/train.py --config configs/config.yaml --device cuda
-
-# === CELL 5: Evaluate ===
-!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
-
-# === CELL 6: Push Results ===
-import subprocess
-
-token = userdata.get('GITHUB_TOKEN')
-subprocess.run('git config user.email "you@example.com"', shell=True)
-subprocess.run('git config user.name "Your Name"', shell=True)
-
-!git add logs/train_loss.csv plots/training_loss.png
-!git commit -m "Training results from Colab"
-
-url = f"https://{token}@github.com/lollogabe/Mock_ML.git"
-subprocess.run(f'git remote set-url origin {url}', shell=True)
-!git push origin main
-print("✓ Pushed to Git")
-
-# === CELL 7: Download Checkpoint ===
-from google.colab import files
-files.download('checkpoints/ae_best.pt')
-print("✓ Checkpoint downloaded")
-
-# === CELL 8: Cleanup ===
-print("Remember to delete token from github.com/settings/tokens for security!")
-```
-
-
----
-
-## Common Issues & Solutions
-
-### **Issue: `ModuleNotFoundError: No module named 'google.colab'`**
-
-**Solution:** You're not in Colab. Use a different approach:
-- For local testing: `python -c "import sys; print(hasattr(sys, 'ps1'))"`
-- For Colab: This error shouldn't happen in Colab notebook cells
-
-### **Issue: `Permission denied (publickey)` when cloning with SSH**
-
-**Root Cause:** SSH key corrupted when pasted into Colab Secrets (line breaks lost or formatting broken)
-
-**Quick Fix — Use HTTPS instead:**
-```python
-!git clone https://github.com/USERNAME/Mock_ML.git
-%cd Mock_ML
-```
-(No authentication needed, works immediately)
-
-**Better SSH Fix — Generate key directly in Colab:**
-```python
-import subprocess
-import os
-
-os.makedirs('/root/.ssh', exist_ok=True)
-
-# Generate new key in Colab
-subprocess.run(
-    'ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" -C "colab@example.com"',
-    shell=True, capture_output=True
-)
-
-# Show public key (copy to GitHub Settings → SSH Keys)
-!cat /root/.ssh/id_ed25519.pub
-
-# Add GitHub to known hosts
-!ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null
-
-# Now SSH will work
-!git clone git@github.com:USERNAME/Mock_ML.git
-```
-
-**Why this works:** Generating the key directly in Colab avoids copy-paste corruption issues.
-
-**Verification:**
-```python
-!ssh -T git@github.com  # Should show "Hi USERNAME! You've successfully authenticated"
-```
-
-### **Issue: Out of Memory During Training**
-
-**Solution:** Reduce batch size:
-```python
-!python scripts/train.py --config configs/config.yaml --device cuda --batch_size 32
-```
-
-### **Issue: `CUDA out of memory` error**
-
-**Solution:** Run garbage collection and reduce model:
+### Cell 3: Verifica GPU
 ```python
 import torch
-torch.cuda.empty_cache()
-
-# Then retry with smaller batch size
-!python scripts/train.py --config configs/config.yaml --device cuda --batch_size 16
+print(f"✓ PyTorch version: {torch.__version__}")
+print(f"✓ CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"✓ GPU: {torch.cuda.get_device_name(0)}")
+    print(f"  Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 ```
+
+**Output atteso:**
+```
+✓ PyTorch version: 2.0.0
+✓ CUDA available: True
+✓ GPU: Tesla T4
+  Memory: 15.0 GB
+```
+
+---
+
+### Cell 4: Training (35-45 min)
+```python
+!python scripts/train.py --config configs/config.yaml --device cuda
+```
+
+**Output atteso:**
+```
+2024-03-11 10:30:45 - Training epoch 1/20
+[████████████████] 100% - loss: 0.4567
+2024-03-11 10:32:15 - Training epoch 2/20
+...
+2024-03-11 11:45:30 - Saved best checkpoint: checkpoints/ae_best.pt
+Training completed in 75.4 seconds
+```
+
+**Output files:**
+- `checkpoints/ae_best.pt` — trained model
+- `logs/train.log` — training log
+- `logs/train_loss.csv` — loss curve (epoch, train_loss, val_loss, time)
+
+---
+
+### Cell 5: Evaluation (3-5 min)
+```python
+!python scripts/evaluate.py \
+    --checkpoint checkpoints/ae_best.pt \
+    --config configs/config.yaml \
+    --device cuda
+```
+
+**Output atteso:**
+```
+Computing latent embeddings...
+Computing anomaly scores...
+TPR (at FPR=10%): 0.87
+AUPRC: 0.92
+Generating plots...
+Saved plots to plots/
+```
+
+**Output plots:**
+- `plots/latent_pca.png` — 2D PCA projection
+- `plots/latent_umap.png` — 2D UMAP projection
+- `plots/anomaly_scores_histogram.png` — anomaly score distributions
+- `plots/gmm_clusters.png` — GMM clustering results
+
+---
+
+### Cell 6: Visualizza Loss Curve (Opzionale)
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('logs/train_loss.csv')
+
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.plot(df['epoch'], df['train_loss'], marker='o', label='Train Loss')
+plt.plot(df['epoch'], df['val_loss'], marker='s', label='Val Loss')
+plt.xlabel('Epoch')
+plt.ylabel('BCE Loss')
+plt.legend()
+plt.grid()
+plt.title('Training Loss Curve')
+
+plt.subplot(1, 2, 2)
+plt.plot(df['epoch'], df['time_s'], marker='o', color='orange')
+plt.xlabel('Epoch')
+plt.ylabel('Time (seconds)')
+plt.grid()
+plt.title('Epoch Duration')
+
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## 📥 Download Risultati
+
+Dopo training/evaluation, scarica i risultati **prima che la sessione finisca** (Colab cancella tutto dopo 12 ore di inattività).
+
+### Metodo 1: Zip Archive (Consigliato)
+```python
+import shutil
+
+# Crea archive con risultati
+shutil.make_archive('results', 'zip', root_dir='.', base_dir='.')
+
+# Download
+from google.colab import files
+files.download('results.zip')
+```
+
+### Metodo 2: File individuali
+```python
+from google.colab import files
+
+files.download('checkpoints/ae_best.pt')
+files.download('logs/train_loss.csv')
+files.download('plots/latent_pca.png')
+```
+
+---
+
+## ⚙️ Configurazione Avanzata
+
+### Modifica Hyperparameters
+
+Per training custom, modificare `configs/config.yaml` **dentro Colab**:
+
+```python
+# Edit config direttamente
+config_content = """
+batch_size: 32          # Riduci se out-of-memory
+hidden_channels: 32     # Model capacity
+latent_dim: 4           # Bottleneck dimensionality
+epochs: 30              # Più epochs
+lr: 5.0e-4              # Learning rate
+weight_decay: 1.0e-5
+device: cuda
+"""
+
+with open('configs/config.yaml', 'w') as f:
+    f.write(config_content)
+
+# Esegui training con config modificato
+!python scripts/train.py --config configs/config.yaml --device cuda
+```
+
+---
+
+### Ridimensiona Batch Size
+
+Se ottieni **CUDA out of memory**:
+
+```python
+# Riduci batch size
+import yaml
+
+with open('configs/config.yaml', 'r') as f:
+    cfg = yaml.safe_load(f)
+
+cfg['batch_size'] = 32  # Da 64 a 32
+
+with open('configs/config.yaml', 'w') as f:
+    yaml.dump(cfg, f)
+
+# Riavvia training
+!python scripts/train.py --config configs/config.yaml
+```
+
+---
+
+### Training Rapido (Test)
+
+Per testare il pipeline (2 epochs, 5 min):
+
+```python
+!python scripts/train.py \
+    --config configs/config.yaml \
+    --epochs 2 \
+    --device cuda
+```
+
+---
+
+## 🔄 Workflow Iterativo
+
+Per esperimenti ripetuti (modifiche modello, hyperparameter tuning):
+
+```python
+import subprocess
+import yaml
+
+def train_experiment(config_mods: dict):
+    """Run experiment con custom config"""
+    # Leggi config base
+    with open('configs/config.yaml', 'r') as f:
+        cfg = yaml.safe_load(f)
+    
+    # Modifica
+    cfg.update(config_mods)
+    
+    # Salva
+    with open('configs/config.yaml', 'w') as f:
+        yaml.dump(cfg, f)
+    
+    # Train
+    subprocess.run(['python', 'scripts/train.py', 
+                   '--config', 'configs/config.yaml'], 
+                   check=True)
+
+# Esperimento 1: Standard
+train_experiment({'epochs': 20, 'batch_size': 64})
+
+# Esperimento 2: Smaller batch (se OOM)
+train_experiment({'epochs': 20, 'batch_size': 32})
+
+# Esperimento 3: Longer training
+train_experiment({'epochs': 30, 'batch_size': 32})
+```
+
+---
+
+## 🆘 Troubleshooting
+
+### Problema: "Failed to clone repository"
+
+**Causa**: Repository non esiste or non è public  
+**Soluzione**: Assicurati che il repo GitHub sia accessibile pubblicamente
+
+```python
+# Verifica URL
+!curl -I https://github.com/lollogabe/Mock_ML.git
+```
+
+Dovrebbe ritornare **200 OK**, non 404.
+
+---
+
+### Problema: "ModuleNotFoundError" dopo setup
+
+**Causa**: Dependencies installation fallita  
+**Soluzione**: Esegui setup manualmente:
+
+```python
+!pip install --upgrade pip
+!pip install torch torchvision scipy sklearn umap-learn pyyaml python-dotenv
+!python scripts/preprocess.py --group 37
+```
+
+---
+
+### Problema: "CUDA out of memory"
+
+**Causa**: Batch size troppo grande per GPU T4 (15 GB VRAM)  
+**Soluzione**:
+
+```python
+# Riduci batch size
+import yaml
+
+cfg = yaml.safe_load(open('configs/config.yaml'))
+cfg['batch_size'] = 16  # Smaller batch
+yaml.dump(cfg, open('configs/config.yaml', 'w'))
+
+# Riprova
+!python scripts/train.py --config configs/config.yaml
+```
+
+---
+
+### Problema: Download data timeout
+
+**Causa**: CERN server lento o connessione internet instabile  
+**Soluzione**:
+
+```python
+# Riprova download con timeout
+import time
+
+for attempt in range(3):
+    try:
+        !python scripts/preprocess.py --group 37 --data-dir data/raw
+        break
+    except Exception as e:
+        print(f"Attempt {attempt + 1} failed, retrying...")
+        time.sleep(10)
+```
+
+---
+
+### Problema: "RuntimeError: Expected 4D input, got 3D instead"
+
+**Causa**: Bug nel data loading  
+**Soluzione**: Aggiungi cell di debug:
+
+```python
+import torch
+from src.data_loader import load_tensors
+
+try:
+    normal_t, low_t, high_t = load_tensors(
+        data_dir='data/raw',
+        normal_file='Normal_data.npz'
+    )
+    print(f"Normal shape: {normal_t.shape}")  # Deve essere (N, 1, 100, 100)
+    print(f"Low shape: {low_t.shape}")
+    print(f"High shape: {high_t.shape}")
+except Exception as e:
+    print(f"Error: {e}")
+    # Se shape è (N, 100, 100), aggiungi dimensione mancante
+    normal_t = normal_t.unsqueeze(1)
+```
+
+---
+
+## 📝 Note Importanti
+
+### Ephemeral Storage
+- Colab cancella tutto dopo 12 ore di inattività
+- **Sempre download risultati** prima di fine sessione
+- Usa Google Drive per storage persistente (opzionale)
+
+### GPU Limits
+- **Idle timeout**: 12 ore inattività → session kills
+- **Data limits**: ~100 GB free tier (non è problema per questo progetto)
+- **Peak hours**: Potrebbe avere T4, non V100 in ore di picco
+
+### Best Practices
+1. ✅ **Salva checkpoint** ogni epoch (già fatto in `train.py`)
+2. ✅ **Download risultati regolarmente** (non aspettare fine training)
+3. ✅ **Test con --epochs 2** prima di 20 epochs
+4. ✅ **Mantieni una copia locale** del config e results
+
+---
+
+## 🔗 Link Utili
+
+- [Google Colab](https://colab.research.google.com)
+- [GitHub Repo](https://github.com/lollogabe/Mock_ML)
+- [CERN Dataset](http://giagu.web.cern.ch/giagu/CERN/P2025)
+
+---
+
+## 📚 Prossimi Steps
+
+1. ✅ Training completato? → Vedi evaluation results
+2. ✅ Pronti per production? → [CINECA_GUIDE.md](CINECA_GUIDE.md)
+3. ✅ Sviluppo locale? → [LOCAL_SETUP.md](LOCAL_SETUP.md)
+4. ✅ Modifica modello? → Vedi `src/model.py`, `src/train.py`
+
+Buon training! 🚀
 
 ### **Issue: Runtime timeout (12 hours max in Colab)**
 
