@@ -9,7 +9,11 @@ data/processed/
 
 # Checkpoints (will be downloaded separately)
 checkpoints/
+
+# Logs
 logs/slurm_*.out
+logs/*.csv
+logs/*.log
 
 # Python
 __pycache__/

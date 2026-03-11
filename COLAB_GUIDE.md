@@ -43,12 +43,77 @@ Local Machine
 - [ ] Project set up: `bash setup.sh`
 - [ ] Git installed: `git --version`
 - [ ] GitHub account (or GitLab, Gitea, etc.)
+- [ ] **SSH key set up** (see Step 0 below — REQUIRED for team collaboration)
 - [ ] Repository created and initialized
 
 ### Google Colab
 - [ ] Google account
 - [ ] Access to colab.research.google.com
 - [ ] Optional: Google Drive for data backup
+
+---
+
+## Step 0: Setup Git SSH Authentication (REQUIRED FOR TEAM)
+
+**Why SSH instead of tokens?**
+- Each collaborator uses their own SSH key (no shared credentials)
+- More secure than Personal Access Tokens
+- Works seamlessly in both local and Colab
+- Standard in professional teams
+
+### 0.1 Generate SSH Key (Each Team Member)
+
+**On your local machine:**
+
+```bash
+# Check if you already have a key
+ls -la ~/.ssh/id_ed25519
+
+# If not, generate one (each team member does this)
+ssh-keygen -t ed25519 -C "your_email@example.com"
+# Press Enter for all prompts (or set custom passphrase)
+
+# Verify it was created
+cat ~/.ssh/id_ed25519.pub
+```
+
+### 0.2 Add SSH Key to GitHub (Each Team Member)
+
+1. Copy your public key:
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+
+2. Go to [github.com/settings/keys](https://github.com/settings/keys)
+
+3. Click **New SSH key**
+   - Title: `MacBook` (or your machine name)
+   - Key type: Authentication Key
+   - Paste your public key
+   - Click **Add SSH key**
+
+4. Test connection:
+   ```bash
+   ssh -T git@github.com
+   # Should output: Hi USERNAME! You've successfully authenticated...
+   ```
+
+**Each collaborator repeats steps 0.1-0.2 with their own SSH key.**
+
+### 0.3 Configure Git (Each Team Member)
+
+```bash
+# Set your identity (use your real name/email)
+git config --global user.name "Your Name"
+git config --global user.email "your_email@example.com"
+
+# Verify
+git config --global --list | grep user
+```
+
+---
+
+## Step 1: Setup Git Repository (Local)
 
 ---
 
@@ -68,17 +133,15 @@ git add .
 # Commit initial snapshot
 git commit -m "Initial commit: ML project setup"
 
-# Add remote (choose one)
-# GitHub:
-git remote add origin https://github.com/YOUR_USERNAME/Mock_ML.git
-
-# GitLab:
-git remote add origin https://gitlab.com/YOUR_USERNAME/Mock_ML.git
+# Add remote using SSH (not HTTPS)
+git remote add origin git@github.com:YOUR_USERNAME/Mock_ML.git
 
 # Push to remote
 git branch -M main
 git push -u origin main
 ```
+
+✅ **Note:** Using SSH (`git@github.com:...`) instead of HTTPS means no credentials are stored in URLs. Each team member authenticates automatically with their own SSH key.
 
 ### 1.2 Create .gitignore
 
@@ -241,13 +304,13 @@ cat > training_colab.ipynb << 'EOF'
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Clone or pull latest code from Git\n",
+    "# Clone using SSH (no credentials needed if SSH key is set up in GitHub)\n",
     "import os\n",
     "os.chdir('/content')\n",
     "\n",
     "# Clone if not already cloned\n",
     "if not os.path.exists('Mock_ML'):\n",
-    "    !git clone https://github.com/YOUR_USERNAME/Mock_ML.git\n",
+    "    !git clone git@github.com:YOUR_USERNAME/Mock_ML.git\n",
     "    print('✓ Repository cloned')\n",
     "else:\n",
     "    os.chdir('/content/Mock_ML')\n",
@@ -376,16 +439,17 @@ cat > training_colab.ipynb << 'EOF'
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Configure Git (first time only)\n",
+    "# Configure Git identity for this Colab session\n",
     "!git config user.email \"your_email@example.com\"\n",
     "!git config user.name \"Your Name\"\n",
     "\n",
-    "# Add results\n",
+    "# Add training results\n",
     "!git add logs/train_loss.csv plots/training_loss.png\n",
+    "\n",
+    "# Commit\n",
     "!git commit -m \"Training results from Colab - GPU run\"\n",
     "\n",
-    "# Push back to repository\n",
-    "# Note: You'll need to provide credentials via GitHub Personal Access Token\n",
+    "# Push back using SSH (automatic authentication via SSH key)\n",
     "!git push origin main\n",
     "print('✓ Results pushed to Git')"
    ]
@@ -504,39 +568,65 @@ Training loss plot saved → plots/training_loss.png
 
 ## Step 5: Push Results Back to Git
 
-### 5.1 Authenticate with GitHub
+### 5.1 SSH Authentication in Colab
 
-In Colab, you need a Personal Access Token for authentication:
+**Good news:** SSH keys work seamlessly in Colab without any extra configuration!
 
-**Generate Token on GitHub:**
-1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
-2. Click **Generate new token**
-3. Name it: `Colab-Training`
-4. Select scopes: `repo` (full control)
-5. Generate and copy token
+When you run `!git push origin main` in Colab, it automatically uses your SSH key from GitHub. No tokens needed.
 
-**Use Token in Colab:**
-```python
-# In Colab notebook, before first git push:
-import os
-os.environ['GIT_AUTHOR_NAME'] = 'Colab-Agent'
-os.environ['GIT_AUTHOR_EMAIL'] = 'your_email@example.com'
-os.environ['GIT_COMMITTER_NAME'] = 'Colab-Agent'
-os.environ['GIT_COMMITTER_EMAIL'] = 'your_email@example.com'
+**However** — SSH keys aren't automatically available in Colab's isolated environment. To push from Colab, you have **two options:**
 
-# Create .netrc for authentication
-netrc_content = f"""machine github.com
-login YOUR_USERNAME
-password YOUR_PERSONAL_ACCESS_TOKEN
-"""
+**Option A: Use Your SSH Key (Recommended for Privacy)**
 
-with open(os.path.expanduser('~/.netrc'), 'w') as f:
-    f.write(netrc_content)
-os.chmod(os.path.expanduser('~/.netrc'), 0o600)
+Create a Colab Secret with your SSH private key:
+1. Local machine: Copy your private key
+   ```bash
+   cat ~/.ssh/id_ed25519
+   ```
 
-# Now git operations will authenticate automatically
-!git push origin main
-```
+2. In Colab: Click **🔑 Secrets** (left sidebar) → Add `GITHUB_SSH_KEY`
+
+3. In Colab notebook, before `git push`:
+   ```python
+   from google.colab import userdata
+   import os
+
+   # Get SSH key from secrets
+   ssh_key = userdata.get('GITHUB_SSH_KEY')
+   
+   # Write to Colab's ssh directory
+   os.makedirs('/root/.ssh', exist_ok=True)
+   with open('/root/.ssh/id_ed25519', 'w') as f:
+       f.write(ssh_key)
+   os.chmod('/root/.ssh/id_ed25519', 0o600)
+   
+   # Add GitHub to known_hosts to skip fingerprint prompt
+   !mkdir -p /root/.ssh
+   !ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
+   
+   # Now git operations will work
+   !git push origin main
+   ```
+
+**Option B: Use GitHub Token as Fallback**
+
+If you prefer not to handle SSH keys in Colab:
+1. Create a Personal Access Token at [github.com/settings/tokens](https://github.com/settings/tokens)
+   - Scopes: `repo` (full control)
+   - This is a temporary, revocable credential
+
+2. In Colab, add it as a secret: **🔑 Secrets** → Add `GITHUB_TOKEN`
+
+3. Before pushing:
+   ```python
+   from google.colab import userdata
+   
+   token = userdata.get('GITHUB_TOKEN')
+   !git remote set-url origin https://lollogabe:{token}@github.com/lollogabe/Mock_ML.git
+   !git push origin main
+   ```
+
+**⚠️ Security Note:** Option A (SSH) is more secure because your private key is only exposed within your Colab environment. Option B exposes a token in Colab logs.
 
 ### 5.2 What to Push Back
 
@@ -907,31 +997,193 @@ python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt
 ### Google Colab Notebook
 
 ```python
-# 1. Clone repo
-!git clone https://github.com/USERNAME/Mock_ML.git
+# 1. Setup SSH for git push (if using Option A from Step 5)
+from google.colab import userdata
+import os
+
+ssh_key = userdata.get('GITHUB_SSH_KEY')
+os.makedirs('/root/.ssh', exist_ok=True)
+with open('/root/.ssh/id_ed25519', 'w') as f:
+    f.write(ssh_key)
+os.chmod('/root/.ssh/id_ed25519', 0o600)
+!ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
+
+# 2. Clone repo using SSH
+!git clone git@github.com:USERNAME/Mock_ML.git
 %cd Mock_ML
 
-# 2. Install & verify GPU
+# 3. Install & verify GPU
 !pip install -q -r requirements.txt
 import torch; print(f'GPU: {torch.cuda.get_device_name(0)}')
 
-# 3. Get data (downloads fresh each time, ~2 min)
+# 4. Get data (downloads fresh each time, ~2 min)
 !python scripts/preprocess.py --group 37
 
-# 4. Train
+# 5. Train
 !python scripts/train.py --config configs/config.yaml --device cuda
 
-# 5. Download checkpoint
+# 6. Download checkpoint
 from google.colab import files
 files.download('checkpoints/ae_best.pt')
 
-# 6. Push logs back (optional)
+# 7. Push logs back
 !git config user.email "you@example.com"
 !git config user.name "Your Name"
 !git add logs/ plots/
 !git commit -m "Results from Colab"
-!git push origin main  # Requires token setup
+!git push origin main  # Works with SSH setup from above
 ```
+
+---
+
+## Team Collaboration Guide (For Your 3 Collaborators)
+
+Since you're working with 2 other collaborators, here's how to coordinate smoothly:
+
+### Setup (Do This Once Per Team Member)
+
+**Each team member (you + 2 collaborators) should:**
+
+1. **Generate SSH key** (Step 0.1)
+   ```bash
+   ssh-keygen -t ed25519 -C "their_email@example.com"
+   ```
+
+2. **Add SSH key to GitHub** (Step 0.2)
+   - Go to [github.com/settings/keys](https://github.com/settings/keys)
+   - Paste their public key (`cat ~/.ssh/id_ed25519.pub`)
+
+3. **Configure Git identity** (Step 0.3)
+   ```bash
+   git config --global user.name "Their Name"
+   git config --global user.email "their_email@example.com"
+   ```
+
+4. **Clone the repository**
+   ```bash
+   git clone git@github.com:lollogabe/Mock_ML.git
+   cd Mock_ML
+   ```
+
+### Workflow: Three-Person Team
+
+```
+Person 1 (You)          Person 2               Person 3
+├─ Local: Preprocess    ├─ Colab: Train        ├─ Colab: Train
+├─ git push             ├─ git pull (code)     ├─ git pull (code)
+│                       ├─ git push (logs)     ├─ git push (logs)
+│                       │                      │
+└─ git pull (results)───┼──────────────────────┴─ get results
+   ├─ Local: Evaluate
+   ├─ git push (eval plots)
+   └─ share results
+```
+
+### Practical Example: First Training Run
+
+**Day 1 - Setup (All Members)**
+```bash
+# Each person runs Step 0 (SSH authentication)
+# Each person: git clone git@github.com:lollogabe/Mock_ML.git
+```
+
+**Day 2 - Prep (Person 1 - You)**
+```bash
+cd Mock_ML
+bash setup.sh
+source venv/bin/activate
+python scripts/preprocess.py --group 37
+
+git add data/.gitkeep  # Just tracking structure, not actual data
+git commit -m "Data structure ready, actual files generated"
+git push origin main
+```
+
+**Day 2-3 - Training (Person 2 or 3)**
+```bash
+# Pull latest code
+git pull origin main
+
+# In Colab: training_colab.ipynb
+# - Clones from git@github.com:lollogabe/Mock_ML.git
+# - Downloads data fresh (2 min)
+# - Trains model (80 min)
+# - Pushes logs and plots back: git push origin main
+
+# After training, Person 1-3 can:
+git pull origin main
+# Get training logs and plots
+```
+
+**Day 3-4 - Evaluation (Person 1 - You)**
+```bash
+git pull origin main
+# Get latest checkpoint (from Person 2's training) and plots
+
+source venv/bin/activate
+python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt
+
+# Push evaluation results
+git add plots/evaluation_*.png logs/evaluate.log
+git commit -m "Evaluation complete - metrics and plots"
+git push origin main
+
+# Share with team:
+echo "Results ready! Check plots/evaluation_*.png"
+```
+
+### Handling Conflicts (If Multiple People Push Together)
+
+If two people push at the same time:
+
+```bash
+git pull origin main  # Fetch latest
+# Git will merge automatically if changes don't conflict
+
+# If conflict occurs:
+git status  # See which files have conflicts
+# Edit conflicting files manually
+git add .
+git commit -m "Merged training results from Person 2 and Person 3"
+git push origin main
+```
+
+### Coordination Tips
+
+1. **Use branches for experiments:**
+   ```bash
+   # Person 2 trying new architecture
+   git checkout -b exp/new_encoder
+   # Make changes
+   git push origin exp/new_encoder
+   
+   # Others can try it:
+   git checkout exp/new_encoder
+   ```
+
+2. **Label your commits clearly:**
+   ```bash
+   git commit -m "Training run #5 - batch_size=32 on Tesla A100
+   
+   - Trained for 20 epochs
+   - Best validation loss: 0.187654
+   - Training time: 45 min
+   - Person: [Your Name]"
+   ```
+
+3. **Check who did what:**
+   ```bash
+   git log --oneline --author="Person Name"
+   git log --graph --all --oneline --decorate
+   ```
+
+4. **Stay synced:**
+   ```bash
+   # Before starting work
+   git pull origin main
+   # Before pushing
+   git pull origin main
+   ```
 
 ---
 
@@ -946,7 +1198,7 @@ git checkout -b exp/batch_size_32
 git push origin exp/batch_size_32
 
 # Colab: Pull specific branch
-!git clone -b exp/batch_size_32 https://github.com/USERNAME/Mock_ML.git
+!git clone -b exp/batch_size_32 git@github.com:lollogabe/Mock_ML.git
 !python scripts/train.py
 
 # Local: Compare results
