@@ -5,18 +5,22 @@
 ## TL;DR — Quick Start
 
 ```python
-# Cell 1: Setup
-!git clone git@github.com:YOUR_USERNAME/Mock_ML.git
+# Cell 1: Clone (HTTPS — simplest, no setup needed)
+import os
+os.chdir('/content')
+!git clone https://github.com/lollogabe/Mock_ML.git
 %cd Mock_ML
+
+# Cell 2: Setup
 !python colab_setup.py --setup
 
-# Cell 2: Download Data
+# Cell 3: Download Data
 !python scripts/preprocess.py --group 37
 
-# Cell 3: Train (35-45 min on T4 GPU)
+# Cell 4: Train (35-45 min on T4 GPU)
 !python scripts/train.py --config configs/config.yaml --device cuda
 
-# Cell 4: Evaluate
+# Cell 5: Evaluate
 !python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
 ```
 
@@ -57,7 +61,25 @@
 
 ## Step 1: Setup Colab Environment
 
-### **Option A: Using SSH (Recommended for team collaboration)**
+### **Quick Start (Simplest)**
+
+Use **HTTPS** — no setup needed:
+
+```python
+import os
+os.chdir('/content')
+
+!git clone https://github.com/lollogabe/Mock_ML.git
+%cd Mock_ML
+
+print("✓ Repository cloned")
+```
+
+Then skip to Step 2 (setup dependencies).
+
+---
+
+### **Option A: Using SSH (For team collaboration with multiple keys)**
 
 In your **first Colab cell**:
 
@@ -294,20 +316,12 @@ If you want to save training logs to the repository:
 Create a Colab notebook with these cells in order:
 
 ```python
-# === CELL 1: Clone Repository ===
-from google.colab import userdata
+# === CELL 1: Clone Repository (HTTPS — simplest) ===
 import os
-
-ssh_key = userdata.get('GITHUB_SSH_KEY')
-os.makedirs('/root/.ssh', exist_ok=True)
-with open('/root/.ssh/id_ed25519', 'w') as f:
-    f.write(ssh_key)
-os.chmod('/root/.ssh/id_ed25519', 0o600)
-!ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null
-
 os.chdir('/content')
-!git clone git@github.com:YOUR_USERNAME/Mock_ML.git
+!git clone https://github.com/lollogabe/Mock_ML.git
 %cd Mock_ML
+print("✓ Repository cloned via HTTPS")
 
 # === CELL 2: Setup ===
 !python colab_setup.py --setup
@@ -330,6 +344,9 @@ files.download('plots/training_loss.png')
 print("✓ All results downloaded!")
 ```
 
+**For SSH (advanced):** If you need to push results back to Git, see the SSH section above for reliable setup.
+
+
 ---
 
 ## Common Issues & Solutions
@@ -340,14 +357,45 @@ print("✓ All results downloaded!")
 - For local testing: `python -c "import sys; print(hasattr(sys, 'ps1'))"`
 - For Colab: This error shouldn't happen in Colab notebook cells
 
-### **Issue: `Permission denied (publickey)` when pushing**
+### **Issue: `Permission denied (publickey)` when cloning with SSH**
 
-**Solution:** SSH key not properly configured. Check:
+**Root Cause:** SSH key corrupted when pasted into Colab Secrets (line breaks lost or formatting broken)
+
+**Quick Fix — Use HTTPS instead:**
 ```python
+!git clone https://github.com/USERNAME/Mock_ML.git
+%cd Mock_ML
+```
+(No authentication needed, works immediately)
+
+**Better SSH Fix — Generate key directly in Colab:**
+```python
+import subprocess
 import os
-print("SSH key exists:", os.path.exists('/root/.ssh/id_ed25519'))
-print("SSH key permissions:", oct(os.stat('/root/.ssh/id_ed25519').st_mode))
-!ssh -T git@github.com  # Test connection
+
+os.makedirs('/root/.ssh', exist_ok=True)
+
+# Generate new key in Colab
+subprocess.run(
+    'ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N "" -C "colab@example.com"',
+    shell=True, capture_output=True
+)
+
+# Show public key (copy to GitHub Settings → SSH Keys)
+!cat /root/.ssh/id_ed25519.pub
+
+# Add GitHub to known hosts
+!ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null
+
+# Now SSH will work
+!git clone git@github.com:USERNAME/Mock_ML.git
+```
+
+**Why this works:** Generating the key directly in Colab avoids copy-paste corruption issues.
+
+**Verification:**
+```python
+!ssh -T git@github.com  # Should show "Hi USERNAME! You've successfully authenticated"
 ```
 
 ### **Issue: Out of Memory During Training**

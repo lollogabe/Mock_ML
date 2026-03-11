@@ -160,41 +160,64 @@ def setup_git_ssh(ssh_key_secret=None):
     Setup Git SSH authentication if secret is provided.
 
     In Colab, you can add SSH key via Secrets and this will configure it.
+    Falls back gracefully if SSH key is corrupted or unavailable.
     """
     if ssh_key_secret is None:
         print("⚠️  SSH key not provided, skipping Git setup")
         print("   To use SSH in Colab: add GITHUB_SSH_KEY to Secrets (🔑)")
+        print("   OR: use HTTPS clone instead (simpler, no setup needed)")
         return True
 
     print("==> Configuring Git SSH authentication")
 
     try:
         ssh_dir = Path.home() / ".ssh"
-        ssh_dir.mkdir(exist_ok=True)
-        (ssh_dir / "config").chmod(0o700)
+        ssh_dir.mkdir(exist_ok=True, mode=0o700)
 
         # Write SSH key
         ssh_key_path = ssh_dir / "id_ed25519"
         ssh_key_path.write_text(ssh_key_secret)
         ssh_key_path.chmod(0o600)
 
+        # Verify key format (should start with -----BEGIN PRIVATE KEY-----)
+        key_content = ssh_key_path.read_text()
+        if "BEGIN" not in key_content or "PRIVATE" not in key_content:
+            print("  ⚠️  Warning: SSH key format looks incorrect")
+            print("     (Secrets may have corrupted line breaks)")
+            print("     Try: Use HTTPS clone instead, or regenerate key in Colab")
+            ssh_key_path.unlink()  # Delete corrupted key
+            return False
+
         # Add GitHub to known_hosts
         cmd = "ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null"
         subprocess.run(cmd, shell=True, capture_output=True)
 
-        # Test connection
+        # Test SSH connection
         result = subprocess.run(
-            "ssh -T git@github.com", shell=True, capture_output=True, text=True
+            "ssh -T git@github.com 2>&1",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=5
         )
+
         if "successfully authenticated" in result.stderr.lower():
             print("  ✓ SSH authentication successful")
             return True
+        elif "permission denied" in result.stderr.lower():
+            print("  ❌ SSH key rejected by GitHub")
+            print("     Check that key is added to: https://github.com/settings/keys")
+            ssh_key_path.unlink()
+            return False
         else:
-            print("  ⚠️  SSH authentication test inconclusive (may still work)")
+            # Inconclusive but likely working
+            print("  ⚠️  SSH test inconclusive, but should work")
+            print(f"     Full output: {result.stderr}")
             return True
 
     except Exception as e:
         print(f"  ❌ Error setting up SSH: {e}")
+        print("     Fallback: Use HTTPS clone (https://github.com/USERNAME/REPO.git)")
         return False
 
 
