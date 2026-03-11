@@ -15,18 +15,17 @@ set -euo pipefail
 # Returns: "cu121", "cu118", or "cpu"
 
 detect_cuda_via_nvidia_smi() {
-    """
-    Detect CUDA version using nvidia-smi command.
-    Falls back to 'cpu' if not available.
-    """
+    # Detect CUDA version using nvidia-smi command.
+    # Falls back to 'cpu' if not available.
     if ! command -v nvidia-smi &>/dev/null; then
         echo "cpu"
         return
     fi
-    
+
     local ver
-    ver=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version: \K[0-9]+\.[0-9]+" || echo "")
-    
+    # Use portable grep (compatible with macOS and Linux)
+    ver=$(nvidia-smi 2>/dev/null | grep "CUDA Version:" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/' || echo "")
+
     if [[ -z "$ver" ]]; then
         echo "cpu"
     elif [[ "$ver" == 12.* ]]; then
@@ -39,10 +38,8 @@ detect_cuda_via_nvidia_smi() {
 }
 
 detect_cuda_via_modules() {
-    """
-    Detect CUDA version using loaded modules (HPC clusters).
-    Used as fallback when nvidia-smi is unavailable.
-    """
+    # Detect CUDA version using loaded modules (HPC clusters).
+    # Used as fallback when nvidia-smi is unavailable.
     if command -v module &>/dev/null; then
         if module list 2>&1 | grep -q "cuda/12"; then
             echo "cu121"
@@ -57,13 +54,10 @@ detect_cuda_via_modules() {
 }
 
 detect_cuda() {
-    """
-    Unified CUDA detection: tries nvidia-smi first, then modules, then defaults to cpu.
-    
-    Environment override:
-        CUDA=cu121 detect_cuda     # forces cu121
-        CUDA=cpu   detect_cuda     # forces cpu
-    """
+    # Unified CUDA detection: tries nvidia-smi first, then modules, then defaults to cpu.
+    # Environment override:
+    #     CUDA=cu121 detect_cuda     # forces cu121
+    #     CUDA=cpu   detect_cuda     # forces cpu
     # Allow explicit override via CUDA env var
     if [[ -n "${CUDA:-}" ]]; then
         echo "$CUDA"
@@ -85,10 +79,8 @@ detect_cuda() {
 # ── Python Version Detection ───────────────────────────────────────────────
 
 verify_python() {
-    """
-    Verify Python executable is available and output version.
-    Prefers $PYTHON env var if set; otherwise uses system python3/python.
-    """
+    # Verify Python executable is available and output version.
+    # Prefers $PYTHON env var if set; otherwise uses system python3/python.
     local python_exe="${PYTHON:-python3}"
     
     # Try PYTHON env var first
@@ -110,33 +102,28 @@ verify_python() {
 # ── Virtual Environment Setup ──────────────────────────────────────────────
 
 create_venv() {
-    """
-    Create a Python virtual environment.
-    
-    Usage:
-        create_venv /path/to/venv          # basic setup
-        create_venv /path/to/venv --system-site-packages  # inherit system packages
-    """
+    # Create a Python virtual environment.
+    # Usage:
+    #     create_venv /path/to/venv          # basic setup
+    #     create_venv /path/to/venv --system-site-packages  # inherit system packages
     local venv_path="$1"
-    shift || true
-    local venv_flags=("${@:-}")
-    
+    local venv_flags=("${@:2}")  # all args after first
+
     if [[ -d "$venv_path" ]]; then
         echo "==> Removing existing venv at $venv_path"
         rm -rf "$venv_path"
     fi
-    
+
     echo "==> Creating virtual environment at $venv_path"
-    python3 -m venv "${venv_flags[@]}" --copies "$venv_path"
+    # Use detected Python executable or fall back to python3
+    local python_exe="${PYTHON:-python3}"
+    "$python_exe" -m venv "${venv_flags[@]}" "$venv_path"
 }
 
 activate_venv() {
-    """
-    Activate a virtual environment by sourcing its activate script.
-    
-    Usage:
-        source <(activate_venv /path/to/venv)
-    """
+    # Activate a virtual environment by sourcing its activate script.
+    # Usage:
+    #     source <(activate_venv /path/to/venv)
     local venv_path="$1"
     
     if [[ ! -f "$venv_path/bin/activate" ]]; then
@@ -151,13 +138,10 @@ activate_venv() {
 # ── Pip Installation ──────────────────────────────────────────────────────
 
 install_pytorch() {
-    """
-    Install PyTorch with CUDA-specific wheel.
-    
-    Usage:
-        install_pytorch cu121
-        install_pytorch cpu
-    """
+    # Install PyTorch with CUDA-specific wheel.
+    # Usage:
+    #     install_pytorch cu121
+    #     install_pytorch cpu
     local cuda_wheel="${1:-cu121}"
     
     echo "==> Installing PyTorch for ${cuda_wheel}"
@@ -172,26 +156,26 @@ install_pytorch() {
 }
 
 install_requirements() {
-    """
-    Install dependencies from requirements.txt.
-    Optionally filters out specified packages.
-    
-    Usage:
-        install_requirements                           # all packages
-        install_requirements torch torchvision        # skip these packages
-    """
+    # Install dependencies from requirements.txt.
+    # Optionally filters out specified packages.
+    # Usage:
+    #     install_requirements                           # all packages
+    #     install_requirements torch torchvision        # skip these packages
     local skip_packages=("${@:-}")
-    
+
     if [[ ${#skip_packages[@]} -eq 0 ]]; then
         pip install --quiet -r requirements.txt
     else
-        # Build grep pattern to exclude packages
+        # Build grep pattern to exclude packages (e.g., "^torch$|^torchvision$")
         local pattern=""
         for pkg in "${skip_packages[@]}"; do
-            pattern="${pattern}|^${pkg}"
+            if [[ -z "$pattern" ]]; then
+                pattern="^${pkg}[>=<~!]|^${pkg}$"
+            else
+                pattern="${pattern}|^${pkg}[>=<~!]|^${pkg}$"
+            fi
         done
-        pattern="^(${pattern:1})"
-        
+
         grep -v -E "$pattern" requirements.txt | pip install --quiet -r /dev/stdin
     fi
 }
@@ -199,9 +183,7 @@ install_requirements() {
 # ── Verification ──────────────────────────────────────────────────────────
 
 verify_installation() {
-    """
-    Verify core dependencies are installed and importable.
-    """
+    # Verify core dependencies are installed and importable.
     echo "==> Verifying installation"
     python - <<'EOF'
 import sys
