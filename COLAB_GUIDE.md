@@ -5,7 +5,7 @@
 ## TL;DR — Quick Start
 
 ```python
-# Cell 1: Clone (HTTPS — simplest, no setup needed)
+# Cell 1: Clone (HTTPS — simplest, no auth needed for public repos)
 import os
 os.chdir('/content')
 !git clone https://github.com/lollogabe/Mock_ML.git
@@ -22,6 +22,10 @@ os.chdir('/content')
 
 # Cell 5: Evaluate
 !python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
+
+# Cell 6: (OPTIONAL) Push results back to Git
+# Only needed if you want to save training logs to repo
+# See "Pushing Results Back" section below
 ```
 
 ---
@@ -61,9 +65,75 @@ os.chdir('/content')
 
 ## Step 1: Setup Colab Environment
 
-### **Quick Start (Simplest)**
+### **Usually You Need Nothing!**
 
-Use **HTTPS** — no setup needed:
+For **cloning** the repo:
+- ✅ Public repo: Just use HTTPS (no authentication)
+- ✅ Private repo: Use token (see below)
+
+```python
+import os
+os.chdir('/content')
+
+# Public repo — no auth needed
+!git clone https://github.com/lollogabe/Mock_ML.git
+%cd Mock_ML
+
+print("✓ Repository cloned")
+```
+
+---
+
+### **Option A: GitHub Token (For Pushing Results Back)**
+
+Use a **Personal Access Token** if you want to **push training logs back to Git**.
+
+#### **Step 1a: Create Token on GitHub**
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
+2. Click **"Generate new token"** → **"Generate new token (classic)"**
+3. Set:
+   - **Token name:** `Colab-Training`
+   - **Expiration:** 90 days (or longer)
+   - **Scopes:** Check only ✅ `repo` (full control of private repositories)
+4. Click **"Generate token"**
+5. **Copy the token** (it only shows once!)
+
+#### **Step 1b: Store Token in Colab Secrets**
+
+1. In your Colab notebook, click **🔑 Secrets** (left sidebar)
+2. Click **+ Add new secret**
+3. **Name:** `GITHUB_TOKEN`
+4. **Value:** Paste your token
+5. Click **"Add secret"**
+
+#### **Step 1c: Clone with Token**
+
+```python
+from google.colab import userdata
+import os
+
+os.chdir('/content')
+
+# Get token from Secrets
+token = userdata.get('GITHUB_TOKEN')
+
+# Clone using token (works for both public and private repos)
+!git clone https://{token}@github.com/lollogabe/Mock_ML.git
+%cd Mock_ML
+
+print("✓ Repository cloned with token authentication")
+```
+
+Then continue to Step 2 (setup).
+
+**⚠️ Security Note:** The token is stored in Colab Secrets (encrypted). Colab doesn't log shell commands, so the token won't be exposed. Best practice: Delete the token on GitHub after you're done training.
+
+---
+
+### **Option B: Public Repo (No Auth Needed)**
+
+If your repo is public, just clone directly:
 
 ```python
 import os
@@ -72,85 +142,7 @@ os.chdir('/content')
 !git clone https://github.com/lollogabe/Mock_ML.git
 %cd Mock_ML
 
-print("✓ Repository cloned")
-```
-
-Then skip to Step 2 (setup dependencies).
-
----
-
-### **Option A: Using SSH (For team collaboration with multiple keys)**
-
-In your **first Colab cell**:
-
-```python
-# 1a. Add SSH key to Colab Secrets
-# Go to 🔑 Secrets (left sidebar) → Click + to add
-# Name: GITHUB_SSH_KEY
-# Paste: content of ~/.ssh/id_ed25519 (your PRIVATE key)
-
-from google.colab import userdata
-import os
-
-# Retrieve SSH key from secrets
-ssh_key = userdata.get('GITHUB_SSH_KEY')
-
-# Setup SSH in Colab
-os.makedirs('/root/.ssh', exist_ok=True)
-with open('/root/.ssh/id_ed25519', 'w') as f:
-    f.write(ssh_key)
-os.chmod('/root/.ssh/id_ed25519', 0o600)
-
-# Add GitHub to known_hosts
-!ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null
-
-print("✓ SSH authentication configured")
-```
-
-Then **clone using SSH**:
-
-```python
-import os
-os.chdir('/content')
-
-# Clone repository
-!git clone git@github.com:YOUR_USERNAME/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned")
-```
-
-### **Option B: Using GitHub Token (Simpler, less secure)**
-
-```python
-from google.colab import userdata
-
-# Create Personal Access Token: https://github.com/settings/tokens
-# Add to Colab Secrets as GITHUB_TOKEN
-
-token = userdata.get('GITHUB_TOKEN')
-
-import os
-os.chdir('/content')
-
-# Clone with token
-!git clone https://{token}@github.com/YOUR_USERNAME/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned with token")
-```
-
-### **Option C: HTTPS (Simplest, works without setup — use for read-only access)**
-
-```python
-import os
-os.chdir('/content')
-
-# No authentication needed
-!git clone https://github.com/YOUR_USERNAME/Mock_ML.git
-%cd Mock_ML
-
-print("✓ Repository cloned (read-only access)")
+print("✓ Repository cloned (no authentication needed)")
 ```
 
 ---
@@ -285,14 +277,25 @@ print("✓ Results saved to Google Drive")
 
 ## Step 7: Push Results Back to Git (Optional)
 
-If you want to save training logs to the repository:
+Only do this if you want to save **training logs** to your repository.
+
+**⚠️ Important:** Don't push large checkpoint files (.pt) — they're too big for Git. Download them separately instead.
+
+### **Using GitHub Token (Recommended)**
 
 ```python
-# Configure Git
-!git config user.email "colab@example.com"
-!git config user.name "Colab"
+from google.colab import userdata
+import subprocess
+import os
 
-# Add training results
+# Get token from Colab Secrets (set up in Step 1)
+token = userdata.get('GITHUB_TOKEN')
+
+# Configure Git with your info
+subprocess.run('git config user.email "your_email@example.com"', shell=True)
+subprocess.run('git config user.name "Your Name"', shell=True)
+
+# Add training results (NOT the checkpoint)
 !git add logs/train_loss.csv plots/training_loss.png
 
 # Commit
@@ -300,14 +303,44 @@ If you want to save training logs to the repository:
 
 - Trained for 20 epochs on Tesla T4
 - Best validation loss: 0.204567
-- Training time: ~40 min
-- Checkpoint: checkpoints/ae_best.pt (download separately)"
+- Training time: ~40 min"
 
-# Push (uses SSH setup from Step 1)
+# Push using token (automatically embedded in URL)
+url = f"https://{token}@github.com/lollogabe/Mock_ML.git"
+result = subprocess.run(f'git remote set-url origin {url}', shell=True, capture_output=True)
 !git push origin main
+
+print("✓ Results pushed to Git")
 ```
 
-**Note:** Large checkpoint files (.pt) should NOT be committed to Git — download separately and clean them locally.
+**That's it!** No SSH key management needed.
+
+### **Cleanup After Training (Security)**
+
+After training is complete, delete the token on GitHub:
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
+2. Find `Colab-Training`
+3. Click **Delete**
+
+The token becomes inactive immediately. Safe!
+
+---
+
+### **If You Don't Want to Push Results**
+
+Just download the checkpoint and logs locally (Step 6) — no Git push needed!
+
+```python
+from google.colab import files
+
+files.download('checkpoints/ae_best.pt')
+files.download('logs/train_loss.csv')
+files.download('plots/training_loss.png')
+
+print("✓ Results downloaded locally")
+# Then commit these to Git on your Mac if you want
+```
 
 ---
 
@@ -315,36 +348,86 @@ If you want to save training logs to the repository:
 
 Create a Colab notebook with these cells in order:
 
+**Option A: Just Download Results (Simplest — no token needed)**
+
 ```python
-# === CELL 1: Clone Repository (HTTPS — simplest) ===
+# === CELL 1: Clone ===
 import os
 os.chdir('/content')
 !git clone https://github.com/lollogabe/Mock_ML.git
 %cd Mock_ML
-print("✓ Repository cloned via HTTPS")
+print("✓ Cloned")
 
 # === CELL 2: Setup ===
 !python colab_setup.py --setup
 
-# === CELL 3: Download Data ===
+# === CELL 3: Data ===
 !python scripts/preprocess.py --group 37
 
 # === CELL 4: Train ===
 !python scripts/train.py --config configs/config.yaml --device cuda
 
 # === CELL 5: Evaluate ===
-!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot --no-umap
+!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
 
 # === CELL 6: Download Results ===
 from google.colab import files
 files.download('checkpoints/ae_best.pt')
 files.download('logs/train_loss.csv')
 files.download('plots/training_loss.png')
-
-print("✓ All results downloaded!")
+print("✓ Downloaded!")
 ```
 
-**For SSH (advanced):** If you need to push results back to Git, see the SSH section above for reliable setup.
+---
+
+**Option B: Push Results to Git (With Token)**
+
+```python
+# === CELL 1: Clone with Token ===
+from google.colab import userdata
+import os
+
+os.chdir('/content')
+token = userdata.get('GITHUB_TOKEN')  # Stored in Secrets
+!git clone https://{token}@github.com/lollogabe/Mock_ML.git
+%cd Mock_ML
+print("✓ Cloned with token")
+
+# === CELL 2: Setup ===
+!python colab_setup.py --setup
+
+# === CELL 3: Data ===
+!python scripts/preprocess.py --group 37
+
+# === CELL 4: Train ===
+!python scripts/train.py --config configs/config.yaml --device cuda
+
+# === CELL 5: Evaluate ===
+!python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt --device cuda --no-plot
+
+# === CELL 6: Push Results ===
+import subprocess
+
+token = userdata.get('GITHUB_TOKEN')
+subprocess.run('git config user.email "you@example.com"', shell=True)
+subprocess.run('git config user.name "Your Name"', shell=True)
+
+!git add logs/train_loss.csv plots/training_loss.png
+!git commit -m "Training results from Colab"
+
+url = f"https://{token}@github.com/lollogabe/Mock_ML.git"
+subprocess.run(f'git remote set-url origin {url}', shell=True)
+!git push origin main
+print("✓ Pushed to Git")
+
+# === CELL 7: Download Checkpoint ===
+from google.colab import files
+files.download('checkpoints/ae_best.pt')
+print("✓ Checkpoint downloaded")
+
+# === CELL 8: Cleanup ===
+print("Remember to delete token from github.com/settings/tokens for security!")
+```
 
 
 ---

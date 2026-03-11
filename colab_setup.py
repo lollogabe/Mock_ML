@@ -238,11 +238,6 @@ def main():
     parser.add_argument(
         "--full", action="store_true", help="Alias for --setup (comprehensive setup)"
     )
-    parser.add_argument(
-        "--with-ssh",
-        action="store_true",
-        help="Setup SSH auth (requires GITHUB_SSH_KEY secret in Colab)",
-    )
 
     args = parser.parse_args()
 
@@ -267,20 +262,7 @@ def main():
         if not install_requirements():
             print("⚠️  Some dependencies failed to install (continuing anyway)")
 
-        # Step 4: Setup SSH if requested
-        if args.with_ssh:
-            try:
-                from google.colab import userdata
-
-                try:
-                    ssh_key = userdata.get("GITHUB_SSH_KEY")
-                    setup_git_ssh(ssh_key)
-                except Exception as e:
-                    print(f"⚠️  Could not retrieve SSH key from Secrets: {e}")
-            except ImportError:
-                print("⚠️  google.colab not available (not running in Colab?)")
-
-    # Step 5: Verify installation
+    # Step 4: Verify installation
     if not verify_installation():
         print("❌ Installation verification failed")
         return 1
@@ -290,8 +272,8 @@ def main():
     print("║  ✓  Colab setup complete!                                            ║")
     print("╠" + "═" * 68 + "╣")
     print("║  Next steps:                                                          ║")
-    print("║    1. Clone repository:                                               ║")
-    print("║       !git clone git@github.com:YOUR_USERNAME/Mock_ML.git             ║")
+    print("║    1. Clone repository (HTTPS for public repos):                       ║")
+    print("║       !git clone https://github.com/YOUR_USERNAME/Mock_ML.git         ║")
     print("║       %cd Mock_ML                                                     ║")
     print("║                                                                       ║")
     print("║    2. Download data:                                                  ║")
@@ -300,8 +282,11 @@ def main():
     print("║    3. Start training:                                                 ║")
     print("║       !python scripts/train.py --config configs/config.yaml --device cuda ║")
     print("║                                                                       ║")
-    print("║    4. Evaluate:                                                       ║")
-    print("║       !python scripts/evaluate.py --checkpoint checkpoints/ae_best.pt ║")
+    print("║    4. (Optional) Push results to Git using token:                      ║")
+    print("║       from google.colab import userdata                               ║")
+    print("║       token = userdata.get('GITHUB_TOKEN')                            ║")
+    print("║       !git remote set-url origin https://{token}@github.com/...       ║")
+    print("║       !git push origin main                                           ║")
     print("╚" + "═" * 68 + "╝")
 
     return 0
